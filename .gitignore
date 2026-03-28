@@ -1,0 +1,25 @@
+# Python 缓存
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 虚拟环境（最关键）
+venv/
+env/
+.venv/
+.env/
+ENV/
+config.json
+
+# 打包生成的文件（你刚才 build 出来的）
+dist/
+build/
+*.egg-info/
+*.egg
+*.whl
+*.tar.gz
+
+# 编辑器/系统文件
+.idea/
+.vscode/
+.DS_Store
