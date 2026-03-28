@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="antialiased">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI降重系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        apple: {
+                            light: '#f5f5f7',
+                            dark: '#000000',
+                            grayLight: '#1c1c1e',
+                            grayDark: '#f5f5f7',
+                        }
+                    }
+                }
+            }
+        }
+        if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark')
+        } else {
+            document.documentElement.classList.remove('dark')
+        }
+    </script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            transition: background-color 0.4s ease, color 0.4s ease;
+        }
+        
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.04);
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+        .dark .glass-panel {
+            background: rgba(28, 28, 30, 0.65);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+
+        .modal-backdrop {
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        .apple-input {
+            background: rgba(255, 255, 255, 0.6);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            transition: all 0.2s ease;
+            color: #1d1d1f;
+        }
+        .dark .apple-input {
+            background: rgba(44, 44, 46, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #f5f5f7;
+        }
+        .apple-input:focus {
+            background: #ffffff;
+            border-color: #0071e3;
+            box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15);
+            outline: none;
+        }
+        .dark .apple-input:focus {
+            background: #1c1c1e;
+        }
+        
+        textarea { resize: none; }
+        
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 10px; }
+        .dark ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
+
+        .loader {
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top: 2px solid white;
+            width: 18px; height: 18px;
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .text-gradient {
+            background: linear-gradient(135deg, #0071e3 0%, #4facfe 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        #toast {
+            position: fixed;
+            top: 24px;
+            left: 50%;
+            transform: translate(-50%, -150%);
+            opacity: 0;
+            z-index: 1000;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            pointer-events: none;
+        }
+        #toast.show {
+            transform: translate(-50%, 0);
+            opacity: 1;
+        }
+
+        .toggle-switch {
+            transition: background-color 0.3s ease;
+        }
+        .toggle-knob {
+            transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+        
+        .fade-slide-enter {
+            opacity: 0;
+            transform: translateX(10px);
+            pointer-events: none;
+        }
+        .fade-slide-active {
+            opacity: 1;
+            transform: translateX(0);
+            pointer-events: auto;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        /* ---------------- 纯正 3D 物理级机械翻牌器 ---------------- */
+        .flip-card-wrapper {
+            display: inline-flex;
+            gap: 2px;
+        }
+        .flip-digit {
+            position: relative;
+            width: 17px;
+            height: 26px;
+            background-color: #333;
+            border-radius: 3px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-weight: 800;
+            font-size: 15px;
+            color: #fff;
+            perspective: 250px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        .flip-digit .part {
+            position: absolute;
+            left: 0;
+            width: 100%;
+            height: 50%;
+            background: linear-gradient(180deg, #444 0%, #222 100%);
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+        }
+        .flip-digit .top {
+            top: 0;
+            align-items: flex-end;
+            border-bottom: 1px solid #111;
+            border-radius: 3px 3px 0 0;
+            transform-origin: bottom;
+        }
+        .flip-digit .top span { transform: translateY(50%); }
+        .flip-digit .bottom {
+            bottom: 0;
+            align-items: flex-start;
+            border-radius: 0 0 3px 3px;
+            transform-origin: top;
+        }
+        .flip-digit .bottom span { transform: translateY(-50%); }
+        
+        .flip-digit.flipping .flap.top {
+            animation: flipTop 0.25s ease-in forwards;
+            z-index: 5;
+        }
+        .flip-digit.flipping .flap.bottom {
+            animation: flipBottom 0.25s ease-out forwards;
+            animation-delay: 0.25s;
+            z-index: 5;
+        }
+        @keyframes flipTop {
+            0% { transform: rotateX(0deg); }
+            100% { transform: rotateX(-90deg); }
+        }
+        @keyframes flipBottom {
+            0% { transform: rotateX(90deg); }
+            100% { transform: rotateX(0deg); }
+        }
+    </style>
+</head>
+<body class="bg-apple-light dark:bg-apple-dark text-apple-grayLight dark:text-apple-grayDark p-4 md:p-6 lg:p-8 relative h-screen flex flex-col overflow-hidden">
+
+<div id="toast" class="glass-panel px-6 py-3.5 rounded-full flex items-center shadow-xl font-semibold text-[14px] text-gray-800 dark:text-gray-100">
+    <span id="toastIcon" class="mr-2.5 flex items-center"></span>
+    <span id="toastMsg"></span>
+</div>
+
+<div id="settingsModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/30 dark:bg-black/50 modal-backdrop opacity-0 pointer-events-none transition-opacity duration-300">
+    <div class="glass-panel w-full max-w-md p-7 rounded-[28px] transform scale-95 transition-transform duration-300 shadow-2xl relative" id="settingsContent">
+        <button onclick="toggleSettings()" class="absolute top-5 right-5 text-gray-400 hover:text-gray-800 dark:hover:text-white transition-colors bg-gray-100 dark:bg-gray-800 rounded-full p-1.5 active:scale-95">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+        
+        <h3 class="text-xl font-semibold mb-6 flex items-center">
+            <svg class="w-6 h-6 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+            API 引擎配置
+        </h3>
+        
+        <div class="space-y-5 text-[14px]">
+            <div id="historyConfigWrapper" class="hidden">
+                <label class="block text-gray-500 dark:text-gray-400 mb-1.5 font-medium">快捷使用历史</label>
+                <div class="flex items-center gap-2">
+                    <select id="configHistory" onchange="applyHistoryConfig()" class="apple-input flex-1 px-3 py-2.5 rounded-xl font-medium cursor-pointer appearance-none">
+                        <option value="">-- 自定义新配置 --</option>
+                    </select>
+                    <button onclick="deleteCurrentConfig()" class="p-2.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400 bg-gray-50 hover:bg-red-50 dark:bg-white/5 dark:hover:bg-red-500/20 rounded-xl transition duration-200" title="删除选中配置">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    </button>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-gray-500 dark:text-gray-400 mb-1.5 font-medium">接口地址 (Base URL)</label>
+                <input type="text" id="baseUrl" oninput="clearDropdownSelection()" placeholder="https://api.openai.com/v1" class="apple-input w-full px-4 py-3 rounded-xl">
+            </div>
+            
+            <div>
+                <label class="block text-gray-500 dark:text-gray-400 mb-1.5 font-medium">API Key</label>
+                <input type="password" id="apiKey" oninput="clearDropdownSelection()" placeholder="sk-..." class="apple-input w-full px-4 py-3 rounded-xl">
+            </div>
+
+            <div>
+                <label class="block text-gray-500 dark:text-gray-400 mb-1.5 font-medium">选用模型 (Model)</label>
+                <input type="text" id="model" oninput="clearDropdownSelection()" placeholder="qwen3.5-flash" class="apple-input w-full px-4 py-3 rounded-xl">
+            </div>
+
+            <button onclick="toggleSettings()" class="w-full mt-4 py-3 bg-gray-800 dark:bg-gray-100 text-white dark:text-black rounded-xl font-semibold hover:opacity-90 active:scale-95 transition-all">完成并保存</button>
+        </div>
+    </div>
+</div>
+
+<div class="max-w-[1800px] w-full mx-auto flex flex-col flex-1 h-full">
+    
+    <header class="flex items-center justify-between mb-5 shrink-0 relative z-20 px-1">
+        <div class="flex flex-col">
+            <h1 class="text-3xl lg:text-[34px] font-extrabold tracking-tight text-gradient leading-tight">AI降重系统</h1>
+            <p class="text-[13px] text-gray-500 dark:text-gray-400 mt-1 font-medium hidden md:block">基于深度行为模拟，生成极具人类情绪和逻辑特征的高维文本。</p>
+        </div>
+        
+        <div class="flex items-center gap-2.5 md:gap-4">
+            
+            <!-- 缓存击中 (Cached Tokens) 绿色翻牌器：修改为永久显示 -->
+            <div id="cacheBadge" class="flex items-center gap-2 bg-green-50/80 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20 px-3.5 py-[5px] rounded-full shadow-sm backdrop-blur-md transition-all" title="命中上下文缓存，为您节省的 Tokens 费用">
+                <span class="text-[11px] font-bold text-green-600 dark:text-green-400 tracking-widest uppercase flex items-center gap-1">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    Cached
+                </span>
+                <div id="cacheFlipContainer" class="flip-card-wrapper"></div>
+            </div>
+
+            <!-- 1. 纯正 3D 机械翻牌器 (Total Tokens) -->
+            <div class="flex items-center gap-2 bg-white/70 dark:bg-black/50 border border-gray-200/60 dark:border-gray-700/60 px-3.5 py-[5px] rounded-full shadow-sm backdrop-blur-md transition-all" title="模型流式消耗的原始 Tokens 量">
+                <span class="text-[11px] font-bold text-gray-400 dark:text-gray-500 tracking-widest uppercase">Tokens</span>
+                <div id="tokenFlipContainer" class="flip-card-wrapper"></div>
+            </div>
+
+            <!-- 2. 常驻型驱动模型徽章 -->
+            <div class="flex items-center gap-2 bg-blue-50/80 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 px-3.5 py-1.5 rounded-full shadow-sm backdrop-blur-md transition-colors duration-500">
+                <div id="modelPulse" class="w-2 h-2 rounded-full bg-gray-400 dark:bg-gray-500 transition-colors duration-300"></div>
+                <span class="text-[12px] font-bold text-gray-500 dark:text-gray-400 tracking-wide transition-colors duration-300" id="detectedModelText">等待调度...</span>
+            </div>
+            
+            <!-- 3. 深浅色切换 -->
+            <button onclick="toggleTheme()" class="p-2.5 rounded-full bg-gray-200/60 dark:bg-gray-800/60 hover:bg-gray-300 dark:hover:bg-gray-700 transition text-gray-700 dark:text-gray-300 active:scale-95 shadow-sm" title="切换深/浅色模式">
+                <svg id="themeIconDark" class="w-[18px] h-[18px] hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                <svg id="themeIconLight" class="w-[18px] h-[18px] block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+            </button>
+            
+            <!-- 4. 配置接口 -->
+            <button onclick="toggleSettings()" class="flex items-center gap-1.5 px-4 py-2 rounded-full bg-black dark:bg-white text-white dark:text-black hover:opacity-85 transition font-semibold text-[13px] shadow-md active:scale-95">
+                <svg class="w-[15px] h-[15px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path></svg>
+                <span class="hidden md:inline">配置接口</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- 精简型中控台 -->
+    <div class="flex flex-col md:flex-row items-center justify-between gap-4 mb-4 shrink-0 z-10 px-1">
+        
+        <div class="relative flex w-full md:w-[500px] bg-gray-200/80 dark:bg-gray-800/80 rounded-[14px] p-1 items-center shadow-inner h-[42px]">
+            <div id="segmentSliderWrapper" class="absolute top-1 bottom-1 w-1/4 transition-transform duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)] z-0 left-0">
+                <div class="w-full h-full px-1">
+                    <div class="w-full h-full bg-white dark:bg-[#636366] rounded-[10px] shadow-[0_2px_8px_rgba(0,0,0,0.1)] dark:shadow-[0_3px_8px_rgba(0,0,0,0.2)]"></div>
+                </div>
+            </div>
+            
+            <label class="cursor-pointer relative flex-1 z-10 flex h-full">
+                <input type="radio" name="promptType" value="paper_polish_enhance" class="peer strategy-radio sr-only" checked onchange="moveSlider(0)">
+                <div class="w-full h-full flex items-center justify-center text-[13px] font-medium text-gray-500 dark:text-gray-400 peer-checked:text-black dark:peer-checked:text-white transition-colors duration-300">深度洗稿(降AI)</div>
+            </label>
+            <label class="cursor-pointer relative flex-1 z-10 flex h-full">
+                <input type="radio" name="promptType" value="polish" class="peer strategy-radio sr-only" onchange="moveSlider(1)">
+                <div class="w-full h-full flex items-center justify-center text-[13px] font-medium text-gray-500 dark:text-gray-400 peer-checked:text-black dark:peer-checked:text-white transition-colors duration-300">学术润色</div>
+            </label>
+            <label class="cursor-pointer relative flex-1 z-10 flex h-full">
+                <input type="radio" name="promptType" value="enhance" class="peer strategy-radio sr-only" onchange="moveSlider(2)">
+                <div class="w-full h-full flex items-center justify-center text-[13px] font-medium text-gray-500 dark:text-gray-400 peer-checked:text-black dark:peer-checked:text-white transition-colors duration-300">逻辑增强</div>
+            </label>
+            <label class="cursor-pointer relative flex-1 z-10 flex h-full">
+                <input type="radio" name="promptType" value="emotion" class="peer strategy-radio sr-only" onchange="moveSlider(3)">
+                <div class="w-full h-full flex items-center justify-center text-[13px] font-medium text-gray-500 dark:text-gray-400 peer-checked:text-black dark:peer-checked:text-white transition-colors duration-300">混沌感情</div>
+            </label>
+        </div>
+
+        <div class="flex items-center gap-3 w-full md:w-auto">
+            <button id="stopBtn" onclick="stopOptimization()" class="hidden fade-slide-enter w-full md:w-auto px-6 py-[10px] bg-red-500 hover:bg-red-600 text-white rounded-[12px] font-semibold text-[14px] shadow-[0_4px_14px_rgba(239,68,68,0.3)] transition-all active:scale-[0.96] flex items-center justify-center shrink-0">
+                <svg class="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clip-rule="evenodd"></path></svg>
+                <span>紧急终止</span>
+            </button>
+            <button id="processBtn" onclick="startOptimization()" class="w-full md:w-auto px-10 py-[10px] bg-[#0071e3] hover:bg-[#0060c2] text-white rounded-[12px] font-semibold text-[14px] shadow-[0_4px_14px_rgba(0,113,227,0.3)] transition-all active:scale-[0.96] flex items-center justify-center shrink-0">
+                <span>开始执行重塑</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 超大沉浸式双屏文本舱 -->
+    <div class="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-5 px-1 pb-4 h-full">
+        
+        <div class="glass-panel rounded-[24px] flex flex-col overflow-hidden relative group shadow-sm h-full">
+            <div class="bg-gray-50/60 dark:bg-gray-800/40 border-b border-gray-200/60 dark:border-gray-700/60 p-3 px-5 flex justify-between items-center z-20 backdrop-blur-md">
+                <div class="flex items-center gap-4">
+                    <span class="font-bold text-gray-700 dark:text-gray-200 text-[14px]">输入源文本</span>
+                    
+                    <div class="flex items-center gap-2 cursor-pointer ml-1" onclick="toggleSplitMode()" title="长文将自动可视化显示切分断点">
+                        <span class="text-[12px] text-gray-500 font-medium select-none">切分高亮</span>
+                        <div id="splitSwitch" class="w-[36px] h-[20px] bg-[#34C759] rounded-full relative toggle-switch">
+                            <div id="splitKnob" class="w-[16px] h-[16px] bg-white rounded-full absolute top-[2px] left-[2px] shadow-sm toggle-knob" style="transform: translateX(16px);"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4">
+                    <span id="charCount" class="text-[12px] font-semibold text-gray-400 bg-white/80 dark:bg-black/30 px-2.5 py-0.5 rounded-full shadow-sm">0 字</span>
+                    <button onclick="clearText()" class="text-[12px] font-medium text-gray-500 hover:text-red-500 flex items-center gap-1.5 transition-colors hover:bg-red-50 dark:hover:bg-red-500/10 px-2 py-1 rounded-md active:scale-95">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        清空
+                    </button>
+                </div>
+            </div>
+            
+            <div class="flex-1 relative bg-transparent">
+                <div id="splitUnderlay" class="absolute inset-0 p-6 whitespace-pre-wrap break-words text-[15px] leading-[1.9] text-transparent z-0 overflow-y-auto pointer-events-none transition-opacity duration-300" style="font-family: inherit;"></div>
+                <textarea id="sourceText" placeholder="在此粘贴需要重构底层的原始文本..." class="absolute inset-0 w-full h-full p-6 bg-transparent outline-none leading-[1.9] text-[15px] z-10 resize-none text-gray-800 dark:text-gray-200" style="font-family: inherit;" oninput="handleInput()" onscroll="syncScroll()"></textarea>
+            </div>
+        </div>
+
+        <div class="glass-panel rounded-[24px] flex flex-col overflow-hidden relative group shadow-sm h-full">
+            <div class="bg-blue-50/60 dark:bg-[#0071e3]/10 border-b border-blue-100 dark:border-[#0071e3]/20 p-3 px-5 flex justify-between items-center z-10 backdrop-blur-md relative">
+                <div class="absolute bottom-0 left-0 h-[2px] bg-gradient-to-r from-[#4facfe] to-[#00f2fe] transition-all duration-300 ease-out opacity-0" id="progressBar" style="width: 0%; box-shadow: 0 0 8px rgba(0,242,254,0.6);"></div>
+                
+                <div class="flex items-center gap-4">
+                    <span class="font-bold text-[#0071e3] dark:text-[#4facfe] text-[14px]">系统输出级</span>
+                    
+                    <div class="flex items-center gap-2 cursor-pointer ml-1" onclick="toggleThinkMode()" title="强制开启/关闭底层模型的推理能力(耗时及消耗较高)">
+                        <span class="text-[12px] text-[#0071e3]/80 dark:text-[#4facfe]/80 font-medium select-none">API 深度思考</span>
+                        <div id="thinkSwitch" class="w-[36px] h-[20px] bg-gray-300 dark:bg-gray-600 rounded-full relative toggle-switch">
+                            <div id="thinkKnob" class="w-[16px] h-[16px] bg-white rounded-full absolute top-[2px] left-[2px] shadow-sm toggle-knob" style="transform: translateX(2px);"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex items-center gap-4">
+                    <span id="outCharCount" class="text-[12px] font-semibold text-[#0071e3]/80 dark:text-[#4facfe]/80 bg-blue-100/60 dark:bg-[#0071e3]/20 px-2.5 py-0.5 rounded-full transition-all shadow-sm">0 字</span>
+                    <button onclick="copyResult()" class="text-[12px] font-medium text-[#0071e3] hover:text-blue-600 flex items-center gap-1.5 transition-colors px-2 py-1 rounded-md active:scale-95">
+                        拷贝
+                    </button>
+                </div>
+            </div>
+            
+            <div id="thinkContainer" class="flex-col border-b border-gray-200/50 dark:border-gray-700/50 bg-[#fafafa]/80 dark:bg-[#111]/80 transition-all duration-500 ease-in-out overflow-hidden" style="max-height: 0px; opacity: 0;">
+                <div class="px-6 py-2.5 text-[12px] text-[#0071e3] dark:text-[#4facfe] font-bold flex items-center gap-2 sticky top-0 backdrop-blur-md z-10 shadow-sm">
+                    <svg class="w-4 h-4 animate-spin-slow" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    大模型底层思考链路捕获中
+                </div>
+                <div id="thinkContent" class="px-6 pb-4 overflow-y-auto text-[13px] text-gray-500 dark:text-gray-400 font-mono leading-[1.7] whitespace-pre-wrap max-h-[160px]">等待调度...</div>
+            </div>
+
+            <div class="flex-1 relative">
+                <textarea id="resultText" readonly placeholder="系统处理结果将在此如打字机般流式阵列输出..." class="w-full h-full p-6 bg-transparent outline-none leading-[1.9] text-[15px] resize-none text-gray-800 dark:text-gray-200"></textarea>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .animate-spin-slow { animation: spin 3s linear infinite; }
+</style>
+
+<script>
+    let configHistoryData = [];
+    let isSplitEnabled = true;
+    let isThinkEnabled = false;  
+    let abortController = null;
+
+    let globalCleanedText = "";
+    let globalThinkText = "";
+    let currentSegmentRaw = "";
+    let currentSegmentThink = "";
+    
+    let estimatedTokens = 0; 
+    let cachedTokens = 0; 
+
+    setInterval(() => { fetch('/api/heartbeat').catch(() => {}); }, 3000);
+
+    function initFlipClocks() {
+        estimatedTokens = 0;
+        cachedTokens = 0;
+        document.getElementById('tokenFlipContainer').innerHTML = '';
+        document.getElementById('cacheFlipContainer').innerHTML = '';
+        updateFlipClock('tokenFlipContainer', 0); 
+        updateFlipClock('cacheFlipContainer', 0); 
+    }
+
+    function createFlipDigit(val) {
+        const digit = document.createElement('div');
+        digit.className = 'flip-digit';
+        digit.setAttribute('data-val', val);
+        digit.innerHTML = `
+            <div class="part top"><span>${val}</span></div>
+            <div class="part bottom"><span>${val}</span></div>
+            <div class="part flap top"><span>${val}</span></div>
+            <div class="part flap bottom"><span>${val}</span></div>
+        `;
+        return digit;
+    }
+
+    function updateFlipClock(containerId, targetValue) {
+        const valStr = targetValue.toString();
+        const container = document.getElementById(containerId);
+        if(!container) return;
+        
+        while(container.children.length < valStr.length) {
+            container.insertBefore(createFlipDigit('0'), container.firstChild);
+        }
+
+        const boxes = Array.from(container.querySelectorAll('.flip-digit'));
+        const paddedStr = valStr.padStart(boxes.length, '0');
+
+        boxes.forEach((box, index) => {
+            const newValue = paddedStr[index];
+            const currentVal = box.getAttribute('data-val');
+
+            if (newValue !== currentVal && !box.isFlipping) {
+                box.isFlipping = true;
+                box.setAttribute('data-val', newValue);
+
+                const top = box.querySelector('.top:not(.flap)');
+                const bottom = box.querySelector('.bottom:not(.flap)');
+                const flapTop = box.querySelector('.flap.top');
+                const flapBottom = box.querySelector('.flap.bottom');
+
+                flapTop.querySelector('span').innerText = currentVal;
+                flapBottom.querySelector('span').innerText = newValue;
+                top.querySelector('span').innerText = newValue;
+
+                box.classList.remove('flipping');
+                void box.offsetWidth; 
+                box.classList.add('flipping');
+
+                setTimeout(() => {
+                    bottom.querySelector('span').innerText = newValue;
+                    box.classList.remove('flipping');
+                    box.isFlipping = false;
+                }, 250); 
+            }
+        });
+    }
+
+    let toastTimeout;
+    function showToast(msg, type = 'success') {
+        const toast = document.getElementById('toast');
+        document.getElementById('toastMsg').innerText = msg;
+        const successIcon = `<svg class="w-[18px] h-[18px] text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path></svg>`;
+        const errorIcon = `<svg class="w-[18px] h-[18px] text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`;
+        const infoIcon = `<svg class="w-[18px] h-[18px] text-[#0071e3]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`;
+        document.getElementById('toastIcon').innerHTML = type === 'success' ? successIcon : (type === 'error' ? errorIcon : infoIcon);
+        toast.classList.add('show');
+        clearTimeout(toastTimeout);
+        toastTimeout = setTimeout(() => toast.classList.remove('show'), 2000);
+    }
+
+    function toggleTheme() {
+        if (document.documentElement.classList.contains('dark')) {
+            document.documentElement.classList.remove('dark');
+            localStorage.theme = 'light';
+        } else {
+            document.documentElement.classList.add('dark');
+            localStorage.theme = 'dark';
+        }
+    }
+
+    function toggleSettings() {
+        const modal = document.getElementById('settingsModal');
+        const content = document.getElementById('settingsContent');
+        if (modal.classList.contains('opacity-0')) {
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            content.classList.remove('scale-95');
+        } else {
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            content.classList.add('scale-95');
+        }
+    }
+
+    function moveSlider(index) {
+        document.getElementById('segmentSliderWrapper').style.transform = `translateX(${index * 100}%)`;
+    }
+
+    function toggleSplitMode() {
+        isSplitEnabled = !isSplitEnabled;
+        const sw = document.getElementById('splitSwitch');
+        const knob = document.getElementById('splitKnob');
+        const underlay = document.getElementById('splitUnderlay');
+        if (isSplitEnabled) {
+            sw.classList.replace('bg-gray-300', 'bg-[#34C759]');
+            sw.classList.replace('dark:bg-gray-600', 'bg-[#34C759]');
+            knob.style.transform = 'translateX(16px)';
+            underlay.style.opacity = '1';
+        } else {
+            sw.classList.replace('bg-[#34C759]', 'bg-gray-300');
+            sw.classList.add('dark:bg-gray-600');
+            knob.style.transform = 'translateX(2px)';
+            underlay.style.opacity = '0';
+        }
+    }
+
+    function toggleThinkMode() {
+        isThinkEnabled = !isThinkEnabled;
+        const sw = document.getElementById('thinkSwitch');
+        const knob = document.getElementById('thinkKnob');
+        const container = document.getElementById('thinkContainer');
+        if (isThinkEnabled) {
+            sw.classList.replace('bg-gray-300', 'bg-[#0071e3]');
+            sw.classList.replace('dark:bg-gray-600', 'bg-[#0071e3]');
+            knob.style.transform = 'translateX(16px)';
+            container.style.maxHeight = '240px';
+            container.style.opacity = '1';
+            container.classList.add('border-b');
+        } else {
+            sw.classList.replace('bg-[#0071e3]', 'bg-gray-300');
+            sw.classList.add('dark:bg-gray-600');
+            knob.style.transform = 'translateX(2px)';
+            container.style.maxHeight = '0px';
+            container.style.opacity = '0';
+            setTimeout(() => container.classList.remove('border-b'), 500);
+        }
+    }
+
+    function countTextLength(text) {
+        const zh = text.match(/[\u4e00-\u9fff]/g);
+        if (zh && zh.length > 0) return zh.length;
+        const en = text.match(/[a-zA-Z]/g);
+        return en ? en.length : 0;
+    }
+
+    function escapeHtml(str) {
+        return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+
+    function renderSplitVisualization() {
+        const text = document.getElementById('sourceText').value;
+        const underlay = document.getElementById('splitUnderlay');
+        if (!text) { underlay.innerHTML = ''; return; }
+
+        const paragraphs = text.split('\n');
+        let html = '';
+        let colorToggle = false;
+        
+        const color1 = 'bg-[#FF9F0A]/15 dark:bg-[#FF9F0A]/25 border-b-[2px] border-[#FF9F0A]/30';
+        const color2 = 'bg-[#0A84FF]/15 dark:bg-[#0A84FF]/25 border-b-[2px] border-[#0A84FF]/30';
+
+        paragraphs.forEach((para, idx) => {
+            const trimmed = para.trim();
+            if (!trimmed) { html += '\n'; return; }
+
+            if (countTextLength(trimmed) <= 500) {
+                const colorClass = colorToggle ? color1 : color2;
+                const match = para.match(/^(\s*)(.*?)(\s*)$/s);
+                html += `${match[1]}<span class="${colorClass} pb-[2px] rounded-[4px]">${escapeHtml(match[2])}</span>${match[3]}`;
+                colorToggle = !colorToggle;
+            } else {
+                const sentences = trimmed.split(/([。！？；!?;])/);
+                let currentSegment = "";
+                let currentChunkRaw = "";
+                let paraHtml = "";
+                for (let i = 0; i < sentences.length; i += 2) {
+                    let sentence = sentences[i];
+                    if (i + 1 < sentences.length) sentence += sentences[i + 1];
+                    if (countTextLength(currentSegment + sentence) <= 500) {
+                        currentSegment += sentence;
+                        currentChunkRaw += sentence;
+                    } else {
+                        if (currentSegment) {
+                            const colorClass = colorToggle ? color1 : color2;
+                            paraHtml += `<span class="${colorClass} pb-[2px] rounded-[4px]">${escapeHtml(currentChunkRaw)}</span>`;
+                            colorToggle = !colorToggle;
+                        }
+                        currentSegment = sentence;
+                        currentChunkRaw = sentence;
+                    }
+                }
+                if (currentSegment) {
+                    const colorClass = colorToggle ? color1 : color2;
+                    paraHtml += `<span class="${colorClass} pb-[2px] rounded-[4px]">${escapeHtml(currentChunkRaw)}</span>`;
+                    colorToggle = !colorToggle;
+                }
+                const match = para.match(/^(\s*)(.*?)(\s*)$/s);
+                html += match[1] + paraHtml + match[3];
+            }
+            if (idx < paragraphs.length - 1) html += '\n';
+        });
+        underlay.innerHTML = html + '<br>';
+    }
+
+    function handleInput() {
+        const val = document.getElementById('sourceText').value;
+        document.getElementById('charCount').innerText = val.length + ' 字';
+        renderSplitVisualization();
+    }
+
+    function syncScroll() {
+        document.getElementById('splitUnderlay').scrollTop = document.getElementById('sourceText').scrollTop;
+    }
+    window.addEventListener('resize', renderSplitVisualization);
+
+    function setBadgeStatus(status, text) {
+        const badgeText = document.getElementById('detectedModelText');
+        const pulse = document.getElementById('modelPulse');
+        
+        badgeText.innerText = text;
+        
+        if (status === 'wait') {
+            pulse.className = 'w-2 h-2 rounded-full bg-gray-400 dark:bg-gray-500 transition-colors duration-300';
+            badgeText.className = 'text-[12px] font-bold text-gray-500 dark:text-gray-400 tracking-wide transition-colors duration-300';
+        } else if (status === 'active') {
+            pulse.className = 'w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)] animate-pulse transition-colors duration-300';
+            badgeText.className = 'text-[12px] font-bold text-blue-600 dark:text-blue-400 tracking-wide transition-colors duration-300';
+        }
+    }
+
+    function clearText() {
+        document.getElementById('sourceText').value = '';
+        document.getElementById('resultText').value = '';
+        document.getElementById('thinkContent').textContent = '等待调度...';
+        document.getElementById('charCount').innerText = '0 字';
+        document.getElementById('outCharCount').innerText = '0 字';
+        
+        setBadgeStatus('wait', '等待调度...');
+        initFlipClocks();
+        
+        globalCleanedText = ""; globalThinkText = ""; currentSegmentRaw = ""; currentSegmentThink = "";
+        renderSplitVisualization();
+        showToast('原文本已清空', 'info');
+    }
+
+    function copyResult() {
+        const text = document.getElementById('resultText').value;
+        if (!text) { showToast('暂无可复制内容', 'error'); return; }
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        try { document.execCommand('copy'); showToast('文本已拷贝至剪贴板', 'success'); } 
+        catch (err) { showToast('拷贝失败', 'error'); }
+        document.body.removeChild(textarea);
+    }
+
+    window.onload = async function() {
+        initFlipClocks();
+        setBadgeStatus('wait', '等待调度...');
+        
+        try {
+            const response = await fetch('/api/config');
+            const config = await response.json();
+            document.getElementById('baseUrl').value = config.base_url || "https://dashscope.aliyuncs.com/compatible-mode/v1";
+            document.getElementById('apiKey').value = config.api_key || "";
+            document.getElementById('model').value = config.model || "qwen3.5-flash";
+            if (config.history && config.history.length > 0) {
+                configHistoryData = config.history;
+                renderHistoryDropdown();
+            }
+        } catch (error) {
+            document.getElementById('baseUrl').value = "https://dashscope.aliyuncs.com/compatible-mode/v1";
+            document.getElementById('model').value = "qwen3.5-flash";
+        }
+    }
+
+    function renderHistoryDropdown() {
+        const wrapper = document.getElementById('historyConfigWrapper');
+        const select = document.getElementById('configHistory');
+        if (configHistoryData.length === 0) { wrapper.classList.add('hidden'); return; }
+        wrapper.classList.remove('hidden');
+        select.innerHTML = '<option value="">-- 自定义新配置 --</option>';
+        configHistoryData.forEach((item, index) => {
+            const option = document.createElement('option');
+            option.value = index;
+            const shortKey = item.api_key ? (item.api_key.substring(0, 4) + '...' + item.api_key.slice(-4)) : '无Key';
+            option.textContent = `[${item.model}] - ${shortKey}`;
+            select.appendChild(option);
+        });
+        select.value = 0;
+    }
+
+    function applyHistoryConfig() {
+        const select = document.getElementById('configHistory');
+        const index = select.value;
+        if (index !== "") {
+            const item = configHistoryData[index];
+            document.getElementById('baseUrl').value = item.base_url;
+            document.getElementById('apiKey').value = item.api_key;
+            document.getElementById('model').value = item.model;
+        }
+    }
+    function clearDropdownSelection() { document.getElementById('configHistory').value = ""; }
+    
+    async function deleteCurrentConfig() {
+        const select = document.getElementById('configHistory');
+        const index = select.value;
+        if (index === "") { showToast("请先选择历史配置记录", "error"); return; }
+        if (!confirm("确定要删除这条记录吗？")) return;
+        try {
+            const response = await fetch('/api/config/delete', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ index: parseInt(index) })
+            });
+            if(response.ok) {
+                configHistoryData.splice(index, 1);
+                renderHistoryDropdown();
+                if(configHistoryData.length === 0) {
+                    document.getElementById('baseUrl').value = "https://dashscope.aliyuncs.com/compatible-mode/v1";
+                    document.getElementById('apiKey').value = "";
+                    document.getElementById('model').value = "qwen3.5-flash";
+                } else { applyHistoryConfig(); }
+                showToast("配置删除成功", "success");
+            }
+        } catch(e) { showToast("删除失败", "error"); }
+    }
+
+    function restoreUI() {
+        const btn = document.getElementById('processBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        
+        stopBtn.classList.replace('fade-slide-active', 'fade-slide-enter');
+        setTimeout(() => stopBtn.classList.add('hidden'), 300);
+        
+        btn.disabled = false;
+        btn.innerHTML = `<span>开始执行重塑</span>`;
+        btn.classList.remove('opacity-70', 'cursor-not-allowed');
+    }
+
+    function updateStreamingUI() {
+        let tempRaw = currentSegmentRaw;
+        let tempThink = currentSegmentThink;
+        
+        const thinkRegex = /<think>([\s\S]*?)(?:<\/think>|$)/g;
+        let match;
+        while ((match = thinkRegex.exec(tempRaw)) !== null) {
+            tempThink += match[1];
+        }
+        
+        let tempClean = tempRaw.replace(/<think>([\s\S]*?)(?:<\/think>|$)/g, '').replace(/<thinking>([\s\S]*?)(?:<\/thinking>|$)/g, '');
+        
+        let displayClean = globalCleanedText + (globalCleanedText && tempClean ? "\n\n" : "") + tempClean;
+        let displayThink = globalThinkText + tempThink;
+        
+        const resText = document.getElementById('resultText');
+        resText.value = displayClean;
+        resText.scrollTop = resText.scrollHeight;
+        document.getElementById('outCharCount').innerText = displayClean.length + ' 字';
+        
+        if(isThinkEnabled) {
+            const tContent = document.getElementById('thinkContent');
+            tContent.textContent = displayThink || (globalThinkText ? globalThinkText : "当前引擎未返回原生思考链路。");
+            tContent.scrollTop = tContent.scrollHeight;
+        }
+    }
+
+    function stopOptimization() {
+        if (abortController) {
+            abortController.abort();
+            abortController = null;
+        }
+    }
+
+    async function startOptimization() {
+        const btn = document.getElementById('processBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const progressBar = document.getElementById('progressBar');
+        
+        const apiKey = document.getElementById('apiKey').value.trim();
+        const baseUrl = document.getElementById('baseUrl').value.trim();
+        const model = document.getElementById('model').value.trim();
+        const text = document.getElementById('sourceText').value.trim();
+        const promptType = document.querySelector('input[name="promptType"]:checked').value;
+
+        if (!text) { showToast("输入源不可为空", "error"); return; }
+        if (!apiKey) { toggleSettings(); showToast("系统拦截: 请键入 API Key", "info"); return; }
+
+        btn.disabled = true;
+        btn.innerHTML = `<span class="loader"></span>建立链路中...`;
+        btn.classList.add('opacity-70', 'cursor-not-allowed');
+        
+        stopBtn.classList.remove('hidden');
+        requestAnimationFrame(() => stopBtn.classList.replace('fade-slide-enter', 'fade-slide-active'));
+        
+        document.getElementById('resultText').value = '';
+        globalCleanedText = ""; globalThinkText = ""; currentSegmentRaw = ""; currentSegmentThink = "";
+        
+        setBadgeStatus('active', '链路验证中...');
+        initFlipClocks(); 
+        
+        progressBar.style.opacity = '1';
+        progressBar.style.width = '2%';
+        
+        let totalStages = promptType === 'paper_polish_enhance' ? 2 : 1;
+        let currentStage = 1;
+
+        abortController = new AbortController();
+
+        try {
+            const response = await fetch('/api/optimize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    text, api_key: apiKey, base_url: baseUrl, model, 
+                    prompt_type: promptType, 
+                    is_think: isThinkEnabled 
+                }),
+                signal: abortController.signal
+            });
+
+            if (!response.ok) { throw new Error((await response.json()).detail || '链路握手失败'); }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder("utf-8");
+            let buffer = "";
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                
+                buffer += decoder.decode(value, { stream: true });
+                let lines = buffer.split('\n');
+                buffer = lines.pop(); 
+
+                for (let line of lines) {
+                    if (!line.trim()) continue;
+                    try {
+                        const data = JSON.parse(line);
+                        
+                        if (data.status === 'stage_start') {
+                            globalCleanedText = ""; 
+                            let stageTitle = data.stage.includes('第一步') ? '【Phase 1: 深度润色与骨架重构】' : 
+                                             data.stage.includes('第二步') ? '【Phase 2: 逻辑增强与拟态注入】' : 
+                                             `【Action: ${data.stage}】`;
+                                             
+                            if (globalThinkText !== "") {
+                                globalThinkText += `\n\n═══════════════════════════\n${stageTitle}\n═══════════════════════════\n\n`;
+                            } else {
+                                globalThinkText = `${stageTitle}\n\n`;
+                            }
+                            
+                            currentSegmentRaw = ""; currentSegmentThink = "";
+                            document.getElementById('resultText').value = '';
+                            document.getElementById('thinkContent').textContent = globalThinkText;
+                        }
+                        else if (data.status === 'meta') {
+                            if (data.model) {
+                                setBadgeStatus('active', data.model);
+                            }
+                            if (data.usage) {
+                                if (data.usage.total) {
+                                    estimatedTokens = data.usage.total;
+                                    updateFlipClock('tokenFlipContainer', estimatedTokens);
+                                }
+                                if (data.usage.cached) {
+                                    cachedTokens = data.usage.cached;
+                                    updateFlipClock('cacheFlipContainer', cachedTokens);
+                                }
+                            }
+                        }
+                        else if (data.status === 'progress') {
+                            btn.innerHTML = `<span class="loader"></span><span class="text-[14px]">${data.message}</span>`;
+                            if (data.message.includes('第二步')) currentStage = 2;
+                            const match = data.message.match(/(\d+)\/(\d+)/);
+                            if (match) {
+                                const cur = parseInt(match[1]), tot = parseInt(match[2]);
+                                progressBar.style.width = `${((currentStage - 1) / totalStages) * 100 + (cur / tot) * (100 / totalStages)}%`;
+                            }
+                        } else if (data.status === 'segment_start') {
+                            currentSegmentRaw = "";
+                            currentSegmentThink = "";
+                        } else if (data.status === 'typing') {
+                            currentSegmentRaw += data.content;
+                            estimatedTokens += Math.max(1, Math.floor(data.content.length * 0.7));
+                            updateFlipClock('tokenFlipContainer', estimatedTokens);
+                            updateStreamingUI();
+                        } else if (data.status === 'thinking') {
+                            currentSegmentThink += data.content;
+                            estimatedTokens += Math.max(1, Math.floor(data.content.length * 0.7));
+                            updateFlipClock('tokenFlipContainer', estimatedTokens);
+                            updateStreamingUI();
+                        } else if (data.status === 'segment_end') {
+                            globalCleanedText += (globalCleanedText && data.content ? "\n\n" : "") + data.content;
+                            
+                            let tempThink = currentSegmentThink;
+                            const thinkRegex = /<think>([\s\S]*?)(?:<\/think>|$)/g;
+                            let m; while ((m = thinkRegex.exec(currentSegmentRaw)) !== null) { tempThink += m[1]; }
+                            if(tempThink) globalThinkText += tempThink + '\n\n---\n\n';
+                            
+                            currentSegmentRaw = ""; currentSegmentThink = "";
+                            updateStreamingUI();
+                        } else if (data.status === 'error') {
+                            progressBar.style.opacity = '0'; setTimeout(() => progressBar.style.width = '0%', 300);
+                            setBadgeStatus('wait', '链路中断');
+                            showToast(data.message, "error"); restoreUI(); return;
+                        } else if (data.status === 'done') {
+                            progressBar.style.width = '100%';
+                            setTimeout(() => { progressBar.style.opacity = '0'; setTimeout(() => progressBar.style.width = '0%', 300); }, 1000);
+                            setBadgeStatus('wait', document.getElementById('detectedModelText').innerText + ' (就绪)');
+                            restoreUI(); 
+                            
+                            if(cachedTokens > 0) {
+                                showToast(`任务完成！缓存帮您节省了 ${cachedTokens} 个 Tokens！`, 'success');
+                            } else {
+                                showToast('重塑任务执行完毕', 'success');
+                            }
+                            return;
+                        }
+                    } catch (e) { }
+                }
+            }
+        } catch (error) {
+            progressBar.style.opacity = '0'; setTimeout(() => progressBar.style.width = '0%', 300);
+            setBadgeStatus('wait', '连接阻断');
+            if (error.name === 'AbortError') {
+                showToast('已强制终止执行', 'info');
+            } else {
+                showToast(error.message, "error");
+            }
+            restoreUI();
+        } finally {
+            abortController = null;
+        }
+    }
+</script>
+</body>
+</html>
