@@ -3,7 +3,7 @@ import json
 import re
 import webbrowser
 import threading
-from typing import List
+from typing import List, Dict, Any, Tuple
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import uvicorn
@@ -18,27 +18,22 @@ from prompts import (
     get_default_enhance_prompt, 
     get_emotion_polish_prompt
 )
-
-# 导入全新的历史记录时光机引擎
 from history_manager import load_history, add_record, delete_record
-
-# 导入独立解耦的局部免检防护引擎
 from protector import get_protection_prompt_addition, is_segment_fully_protected
-
-# ✨ 新增：导入刚才独立编写的智能探针引擎
 from inspector_api import router as inspector_router
+# ✨ 引入 DeepVeri 检测器与健康探针
+from detector import check_aigc_rate, check_health
 
 app = FastAPI(title="AI降重系统 API")
 
 os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
-# ✨ 新增：将智能探针路由挂载到主程序
 app.include_router(inspector_router)
 
 CONFIG_FILE = "config.json"
-
 LAST_HEARTBEAT = time.time()
+
+# --- 数据模型定义 ---
 
 class OptimizeRequest(BaseModel):
     text: str
@@ -51,7 +46,6 @@ class OptimizeRequest(BaseModel):
 class DeleteConfigRequest(BaseModel):
     index: int
 
-# 新增：接收前端历史记录保存的数据模型
 class HistoryRequest(BaseModel):
     source_text: str
     result_text: str
@@ -60,6 +54,12 @@ class HistoryRequest(BaseModel):
     total_tokens: int
     cached_tokens: int
     model_name: str = "未知模型"
+
+class DetectRequest(BaseModel):
+    source_text: str
+    result_text: str
+
+# --- 辅助工具函数 ---
 
 def load_local_config():
     if os.path.exists(CONFIG_FILE):
@@ -87,6 +87,8 @@ def save_local_config(api_key: str, base_url: str, model: str):
     except Exception:
         pass
 
+# --- API 路由接口 ---
+
 @app.get("/")
 def read_root():
     return FileResponse("static/index.html")
@@ -107,15 +109,66 @@ def delete_config(req: DeleteConfigRequest):
             pass
     return {"status": "success"}
 
-# --- 全新：时光机 API 接口群 ---
+# --- ✨ 新增：DeepVeri 本地节点状态心跳探测接口 ---
+@app.get("/api/detect/health")
+def get_detect_health():
+    is_online = check_health()
+    return {"status": "online" if is_online else "offline"}
+
+# --- 核心增强：段落级 AIGC 双向对比检测接口 (加权平均过滤算法) ---
+
+@app.post("/api/detect")
+async def detect_aigc(req: DetectRequest) -> Dict[str, Any]:
+    def process_text_by_paragraphs(text: str) -> Tuple[List[Dict[str, Any]], float]:
+        paragraphs = [p for p in text.split('\n') if p.strip()]
+        details = []
+        total_weighted_rate = 0.0
+        total_weight = 0
+        
+        for p in paragraphs:
+            clean_p = p.replace('\u200B', '').replace('\u200C', '')
+            if not clean_p.strip():
+                continue
+                
+            rate, is_ignored = check_aigc_rate(clean_p)
+            p_len = len(clean_p.strip())
+            
+            details.append({
+                "text": clean_p, 
+                "ai_ratio": rate,
+                "ignored": is_ignored
+            })
+            
+            if not is_ignored and p_len > 0:
+                total_weighted_rate += (rate * p_len)
+                total_weight += p_len
+                
+        avg_rate = (total_weighted_rate / total_weight) if total_weight > 0 else 0.0
+        return details, avg_rate
+
+    source_details, source_avg = process_text_by_paragraphs(req.source_text)
+    result_details, result_avg = process_text_by_paragraphs(req.result_text)
+
+    return {
+        "status": "success",
+        "source": {
+            "average": source_avg,
+            "details": source_details
+        },
+        "result": {
+            "average": result_avg,
+            "details": result_details
+        }
+    }
+
+# --- 时光机历史记录接口 ---
+
 @app.get("/api/history")
 def get_task_history():
-    """获取所有历史记录"""
     return load_history()
 
 @app.post("/api/history")
 def save_task_history(req: HistoryRequest):
-    """保存一条新的任务记录"""
     record = add_record(
         source_text=req.source_text,
         result_text=req.result_text,
@@ -129,18 +182,18 @@ def save_task_history(req: HistoryRequest):
 
 @app.delete("/api/history/{record_id}")
 def delete_task_history(record_id: str):
-    """删除指定的历史记录"""
     success = delete_record(record_id)
     if success:
         return {"status": "success"}
     raise HTTPException(status_code=400, detail="删除失败")
-# -------------------------------
 
 @app.get("/api/heartbeat")
 def heartbeat():
     global LAST_HEARTBEAT
     LAST_HEARTBEAT = time.time()
     return {"status": "alive"}
+
+# --- 核心处理逻辑 ---
 
 def count_text_length(text: str) -> int:
     chinese_pattern = re.compile(r'[\u4e00-\u9fff]')
@@ -243,7 +296,6 @@ async def optimize_text(req: OptimizeRequest):
                 system_prompt = get_default_polish_prompt()
                 task_instruction = "请处理以下文本："
 
-            # 动态注入划词锁定保护指令
             system_prompt += get_protection_prompt_addition()
 
             history = []
@@ -254,7 +306,6 @@ async def optimize_text(req: OptimizeRequest):
                 yield ("chunk", json.dumps({"status": "progress", "message": f"{stage_name}: 正在处理 {idx+1}/{len(stage_segments)} 段..."}) + "\n")
                 yield ("chunk", json.dumps({"status": "segment_start"}) + "\n")
 
-                # 【极致省流】：如果检测到该段落全是 [PROTECTED] 占位符，直接秒级闪避，不调用大模型
                 if is_segment_fully_protected(p):
                     yield ("chunk", json.dumps({"status": "typing", "content": p}) + "\n")
                     yield ("chunk", json.dumps({"status": "segment_end", "content": p}) + "\n")
@@ -295,7 +346,7 @@ async def optimize_text(req: OptimizeRequest):
                                 cached = getattr(chunk.usage.prompt_tokens_details, 'cached_tokens', 0)
                                 if cached: usage_dict["cached"] = cached
                             elif hasattr(chunk.usage, 'prompt_cache_hit_tokens'):
-                                cached = getattr(chunk.usage, 'prompt_cache_hit_tokens', 0)
+                                cached = getattr(chunk.usage.prompt_cache_hit_tokens, 'cached_tokens', 0)
                                 if cached: usage_dict["cached"] = cached
                             yield ("chunk", json.dumps({"status": "meta", "usage": usage_dict}) + "\n")
 
@@ -362,7 +413,8 @@ def monitor_heartbeat():
 def start_browser():
     url = "http://127.0.0.1:8000"
     time.sleep(1.5)
-    print(f"\n>>> 正在自动打开浏览器访问: {url} <<<\n>>> 提示：关闭浏览器网页后，本控制台会自动停止运行 <<<\n")
+    print(f"\n>>> 正在自动打开浏览器访问: {url} <<<")
+    print(">>> 提示：关闭浏览器网页后，本控制台会自动停止运行 <<<\n")
     webbrowser.open_new(url)
 
 if __name__ == "__main__":

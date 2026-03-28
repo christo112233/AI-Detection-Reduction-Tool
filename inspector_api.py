@@ -29,16 +29,20 @@ def auto_detect_protection_zones(req: AnalyzeRequest) -> List[Dict[str, Any]]:
         # 规则 1: 参考文献标识 (References / Bibliography)
         if re.match(r'^(参考文献|References|Bibliography|参考书目)[\s:：]*$', stripped, re.IGNORECASE):
             is_locked = True
-        elif re.match(r'^\[\d+\]\s+.*', stripped): 
-            # 匹配 "[1] Author, Title..." 格式的参考文献
+        elif re.match(r'^\[\d+\]\s*.*', stripped): 
+            # ✨修复: 匹配 "[1] Author" 格式，将 \s+ 改为 \s*，允许括号后没有空格
             is_locked = True
             
         # 规则 2: 章节标题标识
-        elif re.match(r'^(第[一二三四五六七八九十百千万]+章|Chapter\s*\d+|[0-9]+(\.[0-9]+)*\s+.*|摘要|Abstract|致谢|Acknowledgement|引言|Introduction)[\s:：]*$', stripped, re.IGNORECASE):
+        elif re.match(r'^(第[\d一二三四五六七八九十百千万]+章|Chapter\s*\d+|[0-9]+(\.[0-9]+)*\s*.*|摘要|Abstract|致谢|Acknowledgement|引言|Introduction)[\s:：]*$', stripped, re.IGNORECASE):
+            # ✨修复: 增加了 \d 支持"第1章"，并将 \s+ 改为 \s* 支持 "1.1标题" 无空格格式
             is_locked = True
             
         # 规则 3: 无标点符号的极短独立行（通常是小标题或孤立的数据）
-        elif len(stripped) < 25 and not re.search(r'[。！？.!?]', stripped):
+        elif len(stripped) < 35 and not re.search(r'[。！？.!?]$', stripped):
+            # ✨致命 Bug 修复: 加上结束符 $，只排除以句号结尾的完整长句。
+            # 原本没有 $ 会导致 "3. Algorithm" 因为带有小数点而被漏判！
+            # 顺便把长度放宽到了 35 字符，兼容稍微长一点的标题
             is_locked = True
             
         results.append({
