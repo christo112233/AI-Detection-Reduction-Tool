@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI降重系统</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/diff_match_patch/20121119/diff_match_patch.js"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -45,6 +46,19 @@
             background: rgba(28, 28, 30, 0.65);
             border: 1px solid rgba(255, 255, 255, 0.08);
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+
+        .dock-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(30px);
+            -webkit-backdrop-filter: blur(30px);
+            border: 1px solid rgba(200, 200, 200, 0.3);
+            box-shadow: 0 10px 40px -10px rgba(0,0,0,0.08);
+        }
+        .dark .dock-panel {
+            background: rgba(30, 30, 30, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: -5px 0 30px rgba(0,0,0,0.5);
         }
 
         .modal-backdrop {
@@ -114,12 +128,8 @@
             opacity: 1;
         }
 
-        .toggle-switch {
-            transition: background-color 0.3s ease;
-        }
-        .toggle-knob {
-            transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-        }
+        .toggle-switch { transition: background-color 0.3s ease; }
+        .toggle-knob { transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); }
         
         .fade-slide-enter {
             opacity: 0;
@@ -133,72 +143,78 @@
             transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
         }
 
-        /* ---------------- 纯正 3D 物理级机械翻牌器 ---------------- */
-        .flip-card-wrapper {
+        /* ---------------- 丝滑物理级滑动显示器 ---------------- */
+        .sliding-clock-wrapper {
             display: inline-flex;
             gap: 2px;
         }
-        .flip-digit {
-            position: relative;
-            width: 17px;
+        .sliding-digit-box {
+            width: 16px;
             height: 26px;
-            background-color: #333;
-            border-radius: 3px;
+            background-color: rgba(0, 0, 0, 0.05); 
+            border-radius: 5px;
+            color: inherit; 
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-            font-weight: 800;
+            font-weight: 700;
             font-size: 15px;
-            color: #fff;
-            perspective: 250px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        }
-        .flip-digit .part {
-            position: absolute;
-            left: 0;
-            width: 100%;
-            height: 50%;
-            background: linear-gradient(180deg, #444 0%, #222 100%);
             overflow: hidden;
+            position: relative;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.06);
+        }
+        .dark .sliding-digit-box {
+            background-color: rgba(255, 255, 255, 0.1);
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
+        }
+        .sliding-digit-col {
             display: flex;
-            justify-content: center;
+            flex-direction: column;
+            transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+            will-change: transform;
         }
-        .flip-digit .top {
-            top: 0;
-            align-items: flex-end;
-            border-bottom: 1px solid #111;
-            border-radius: 3px 3px 0 0;
-            transform-origin: bottom;
+        .sliding-digit-num {
+            height: 26px;
+            line-height: 26px;
+            text-align: center;
+            flex-shrink: 0;
         }
-        .flip-digit .top span { transform: translateY(50%); }
-        .flip-digit .bottom {
-            bottom: 0;
-            align-items: flex-start;
-            border-radius: 0 0 3px 3px;
-            transform-origin: top;
+
+        /* ---------------- 差异对比高级视觉 UI ---------------- */
+        .diff-container {
+            font-family: inherit;
+            white-space: pre-wrap;
+            word-break: break-word;
         }
-        .flip-digit .bottom span { transform: translateY(-50%); }
-        
-        .flip-digit.flipping .flap.top {
-            animation: flipTop 0.25s ease-in forwards;
-            z-index: 5;
+        .diff-add {
+            background-color: #e6ffed;
+            color: #1a7f37;
+            text-decoration: none;
+            border-radius: 4px;
+            padding: 0.1em 0.25em;
+            font-weight: 600;
+            box-shadow: 0 1px 2px rgba(26, 127, 55, 0.1);
         }
-        .flip-digit.flipping .flap.bottom {
-            animation: flipBottom 0.25s ease-out forwards;
-            animation-delay: 0.25s;
-            z-index: 5;
+        .dark .diff-add {
+            background-color: rgba(46, 160, 67, 0.25);
+            color: #3fb950;
+            box-shadow: none;
         }
-        @keyframes flipTop {
-            0% { transform: rotateX(0deg); }
-            100% { transform: rotateX(-90deg); }
+        .diff-delete {
+            background-color: #ffebe9;
+            color: #cf222e;
+            text-decoration: line-through;
+            border-radius: 4px;
+            padding: 0.1em 0.25em;
+            opacity: 0.85;
         }
-        @keyframes flipBottom {
-            0% { transform: rotateX(90deg); }
-            100% { transform: rotateX(0deg); }
+        .dark .diff-delete {
+            background-color: rgba(248, 81, 73, 0.25);
+            color: #ff453a;
         }
     </style>
 </head>
 <body class="bg-apple-light dark:bg-apple-dark text-apple-grayLight dark:text-apple-grayDark p-4 md:p-6 lg:p-8 relative h-screen flex flex-col overflow-hidden">
 
-<div id="toast" class="glass-panel px-6 py-3.5 rounded-full flex items-center shadow-xl font-semibold text-[14px] text-gray-800 dark:text-gray-100">
+<div id="toast" class="glass-panel px-6 py-3.5 rounded-full flex items-center shadow-xl font-semibold text-[14px] text-gray-800 dark:text-gray-100 z-[60]">
     <span id="toastIcon" class="mr-2.5 flex items-center"></span>
     <span id="toastMsg"></span>
 </div>
@@ -247,6 +263,23 @@
     </div>
 </div>
 
+<!-- ================= 时光机右侧抽屉 ================= -->
+<div id="historyBackdrop" class="fixed inset-0 z-40 bg-black/20 dark:bg-black/40 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-300" onclick="toggleHistoryDrawer()"></div>
+<div id="historyDrawer" class="fixed inset-y-0 right-0 z-50 w-full sm:w-[420px] dock-panel transform translate-x-full transition-transform duration-500 ease-[cubic-bezier(0.25,0.8,0.25,1)] flex flex-col shadow-2xl border-l border-white/40 dark:border-gray-700/50">
+    <div class="px-6 py-5 border-b border-gray-200/50 dark:border-gray-700/50 flex justify-between items-center bg-white/40 dark:bg-black/20">
+        <h3 class="text-[18px] font-bold flex items-center gap-2 text-gray-800 dark:text-gray-100">
+            <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            重塑档案馆 
+            <span class="text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-200/60 dark:bg-gray-800/80 px-2.5 py-0.5 rounded-full ml-2 shadow-inner" id="historyCount">0 / 30</span>
+        </h3>
+        <button onclick="toggleHistoryDrawer()" class="p-1.5 rounded-full bg-gray-200/50 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors text-gray-500 dark:text-gray-400 active:scale-95">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+    </div>
+    <div id="historyList" class="flex-1 overflow-y-auto p-4 space-y-4"></div>
+</div>
+<!-- ======================================================= -->
+
 <div class="max-w-[1800px] w-full mx-auto flex flex-col flex-1 h-full">
     
     <header class="flex items-center justify-between mb-5 shrink-0 relative z-20 px-1">
@@ -257,34 +290,35 @@
         
         <div class="flex items-center gap-2.5 md:gap-4">
             
-            <!-- 缓存击中 (Cached Tokens) 绿色翻牌器：修改为永久显示 -->
             <div id="cacheBadge" class="flex items-center gap-2 bg-green-50/80 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20 px-3.5 py-[5px] rounded-full shadow-sm backdrop-blur-md transition-all" title="命中上下文缓存，为您节省的 Tokens 费用">
                 <span class="text-[11px] font-bold text-green-600 dark:text-green-400 tracking-widest uppercase flex items-center gap-1">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                     Cached
                 </span>
-                <div id="cacheFlipContainer" class="flip-card-wrapper"></div>
+                <div id="cacheFlipContainer" class="sliding-clock-wrapper text-green-700 dark:text-green-400"></div>
             </div>
 
-            <!-- 1. 纯正 3D 机械翻牌器 (Total Tokens) -->
-            <div class="flex items-center gap-2 bg-white/70 dark:bg-black/50 border border-gray-200/60 dark:border-gray-700/60 px-3.5 py-[5px] rounded-full shadow-sm backdrop-blur-md transition-all" title="模型流式消耗的原始 Tokens 量">
-                <span class="text-[11px] font-bold text-gray-400 dark:text-gray-500 tracking-widest uppercase">Tokens</span>
-                <div id="tokenFlipContainer" class="flip-card-wrapper"></div>
+            <div class="flex items-center gap-2.5 bg-white/70 dark:bg-black/50 border border-gray-200/60 dark:border-gray-700/60 px-4 py-[6px] rounded-full shadow-sm backdrop-blur-md transition-all" title="模型流式消耗的原始 Tokens 量">
+                <span class="text-[12px] font-bold text-gray-400 dark:text-gray-500 tracking-widest uppercase">Tokens</span>
+                <div id="tokenFlipContainer" class="sliding-clock-wrapper text-gray-800 dark:text-gray-200"></div>
             </div>
 
-            <!-- 2. 常驻型驱动模型徽章 -->
-            <div class="flex items-center gap-2 bg-blue-50/80 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 px-3.5 py-1.5 rounded-full shadow-sm backdrop-blur-md transition-colors duration-500">
+            <!-- 修复：补回 id="detectedModelBadge"，并加入 transition-all, overflow-hidden 等核心动效类 -->
+            <div id="detectedModelBadge" class="flex items-center justify-center gap-2 bg-blue-50/80 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 px-3.5 py-1.5 rounded-full shadow-sm backdrop-blur-md transition-all duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)] whitespace-nowrap overflow-hidden min-w-[130px]">
                 <div id="modelPulse" class="w-2 h-2 rounded-full bg-gray-400 dark:bg-gray-500 transition-colors duration-300"></div>
-                <span class="text-[12px] font-bold text-gray-500 dark:text-gray-400 tracking-wide transition-colors duration-300" id="detectedModelText">等待调度...</span>
+                <span class="text-[12px] font-bold text-gray-500 dark:text-gray-400 tracking-wide transition-opacity duration-300 opacity-100" id="detectedModelText">等待调度...</span>
             </div>
             
-            <!-- 3. 深浅色切换 -->
             <button onclick="toggleTheme()" class="p-2.5 rounded-full bg-gray-200/60 dark:bg-gray-800/60 hover:bg-gray-300 dark:hover:bg-gray-700 transition text-gray-700 dark:text-gray-300 active:scale-95 shadow-sm" title="切换深/浅色模式">
                 <svg id="themeIconDark" class="w-[18px] h-[18px] hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
                 <svg id="themeIconLight" class="w-[18px] h-[18px] block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
             </button>
             
-            <!-- 4. 配置接口 -->
+            <button onclick="toggleHistoryDrawer()" class="flex items-center gap-1.5 px-3 py-2 md:px-4 rounded-full bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200/50 dark:border-indigo-500/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition font-semibold text-[13px] shadow-sm active:scale-95">
+                <svg class="w-[15px] h-[15px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span class="hidden md:inline">时光机</span>
+            </button>
+
             <button onclick="toggleSettings()" class="flex items-center gap-1.5 px-4 py-2 rounded-full bg-black dark:bg-white text-white dark:text-black hover:opacity-85 transition font-semibold text-[13px] shadow-md active:scale-95">
                 <svg class="w-[15px] h-[15px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path></svg>
                 <span class="hidden md:inline">配置接口</span>
@@ -292,7 +326,6 @@
         </div>
     </header>
 
-    <!-- 精简型中控台 -->
     <div class="flex flex-col md:flex-row items-center justify-between gap-4 mb-4 shrink-0 z-10 px-1">
         
         <div class="relative flex w-full md:w-[500px] bg-gray-200/80 dark:bg-gray-800/80 rounded-[14px] p-1 items-center shadow-inner h-[42px]">
@@ -331,9 +364,9 @@
         </div>
     </div>
 
-    <!-- 超大沉浸式双屏文本舱 -->
     <div class="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-5 px-1 pb-4 h-full">
         
+        <!-- 左侧舱 -->
         <div class="glass-panel rounded-[24px] flex flex-col overflow-hidden relative group shadow-sm h-full">
             <div class="bg-gray-50/60 dark:bg-gray-800/40 border-b border-gray-200/60 dark:border-gray-700/60 p-3 px-5 flex justify-between items-center z-20 backdrop-blur-md">
                 <div class="flex items-center gap-4">
@@ -345,13 +378,28 @@
                             <div id="splitKnob" class="w-[16px] h-[16px] bg-white rounded-full absolute top-[2px] left-[2px] shadow-sm toggle-knob" style="transform: translateX(16px);"></div>
                         </div>
                     </div>
+                    
+                    <!-- ✨ 新增：上帝视角！呼出全屏透视镜按钮 -->
+                    <button onclick="window.InspectorSystem && window.InspectorSystem.open()" class="ml-2 px-3 py-1 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-500/10 dark:to-purple-500/10 border border-indigo-200/60 dark:border-indigo-500/30 text-indigo-600 dark:text-indigo-400 rounded-full text-[12px] font-semibold flex items-center gap-1.5 hover:shadow-md transition-all active:scale-95" title="进入全屏模式，精细化管控每一段的免检状态">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        选段透视
+                    </button>
+                    
                 </div>
                 <div class="flex items-center gap-4">
                     <span id="charCount" class="text-[12px] font-semibold text-gray-400 bg-white/80 dark:bg-black/30 px-2.5 py-0.5 rounded-full shadow-sm">0 字</span>
-                    <button onclick="clearText()" class="text-[12px] font-medium text-gray-500 hover:text-red-500 flex items-center gap-1.5 transition-colors hover:bg-red-50 dark:hover:bg-red-500/10 px-2 py-1 rounded-md active:scale-95">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                        清空
-                    </button>
+                    
+                    <!-- 新增：解锁清空按钮组 -->
+                    <div class="flex items-center gap-1 border-l border-gray-200 dark:border-gray-700 pl-2 ml-1">
+                        <button onclick="window.LockSystem && window.LockSystem.clearAllLocks()" class="text-[12px] font-medium text-indigo-500 hover:text-indigo-600 flex items-center gap-1 transition-colors hover:bg-indigo-50 dark:hover:bg-indigo-500/10 px-2 py-1 rounded-md active:scale-95" title="清除所有局部划词锁定标记">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"></path></svg>
+                            解锁
+                        </button>
+                        <button onclick="clearText()" class="text-[12px] font-medium text-gray-500 hover:text-red-500 flex items-center gap-1.5 transition-colors hover:bg-red-50 dark:hover:bg-red-500/10 px-2 py-1 rounded-md active:scale-95">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            清空
+                        </button>
+                    </div>
                 </div>
             </div>
             
@@ -361,6 +409,7 @@
             </div>
         </div>
 
+        <!-- 右侧舱 -->
         <div class="glass-panel rounded-[24px] flex flex-col overflow-hidden relative group shadow-sm h-full">
             <div class="bg-blue-50/60 dark:bg-[#0071e3]/10 border-b border-blue-100 dark:border-[#0071e3]/20 p-3 px-5 flex justify-between items-center z-10 backdrop-blur-md relative">
                 <div class="absolute bottom-0 left-0 h-[2px] bg-gradient-to-r from-[#4facfe] to-[#00f2fe] transition-all duration-300 ease-out opacity-0" id="progressBar" style="width: 0%; box-shadow: 0 0 8px rgba(0,242,254,0.6);"></div>
@@ -372,6 +421,13 @@
                         <span class="text-[12px] text-[#0071e3]/80 dark:text-[#4facfe]/80 font-medium select-none">API 深度思考</span>
                         <div id="thinkSwitch" class="w-[36px] h-[20px] bg-gray-300 dark:bg-gray-600 rounded-full relative toggle-switch">
                             <div id="thinkKnob" class="w-[16px] h-[16px] bg-white rounded-full absolute top-[2px] left-[2px] shadow-sm toggle-knob" style="transform: translateX(2px);"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center gap-2 cursor-pointer ml-1" onclick="toggleDiffMode()" title="开启后，直观显示被AI修改、删除和新增的词汇">
+                        <span class="text-[12px] text-[#0071e3]/80 dark:text-[#4facfe]/80 font-medium select-none">差异对比高亮</span>
+                        <div id="diffSwitch" class="w-[36px] h-[20px] bg-gray-300 dark:bg-gray-600 rounded-full relative toggle-switch">
+                            <div id="diffKnob" class="w-[16px] h-[16px] bg-white rounded-full absolute top-[2px] left-[2px] shadow-sm toggle-knob" style="transform: translateX(2px);"></div>
                         </div>
                     </div>
                 </div>
@@ -393,7 +449,8 @@
             </div>
 
             <div class="flex-1 relative">
-                <textarea id="resultText" readonly placeholder="系统处理结果将在此如打字机般流式阵列输出..." class="w-full h-full p-6 bg-transparent outline-none leading-[1.9] text-[15px] resize-none text-gray-800 dark:text-gray-200"></textarea>
+                <textarea id="resultText" readonly placeholder="系统处理结果将在此如打字机般流式阵列输出..." class="w-full h-full p-6 bg-transparent outline-none leading-[1.9] text-[15px] resize-none text-gray-800 dark:text-gray-200 absolute inset-0 z-10 transition-opacity duration-500 opacity-100 pointer-events-auto"></textarea>
+                <div id="diffContent" class="absolute inset-0 p-6 overflow-y-auto diff-container text-[15px] leading-[1.9] z-20 transition-opacity duration-500 opacity-0 pointer-events-none rounded-b-[24px]"></div>
             </div>
         </div>
     </div>
@@ -407,7 +464,9 @@
     let configHistoryData = [];
     let isSplitEnabled = true;
     let isThinkEnabled = false;  
+    let isDiffEnabled = false; 
     let abortController = null;
+    let dmp = new diff_match_patch(); 
 
     let globalCleanedText = "";
     let globalThinkText = "";
@@ -416,70 +475,57 @@
     
     let estimatedTokens = 0; 
     let cachedTokens = 0; 
+    
+    let diffThrottleTimeout = null;
+    let allHistoryRecords = []; 
+
+    const promptTypeMap = {
+        'paper_polish_enhance': '深度洗稿',
+        'polish': '学术润色',
+        'enhance': '逻辑增强',
+        'emotion': '混沌感情'
+    };
 
     setInterval(() => { fetch('/api/heartbeat').catch(() => {}); }, 3000);
 
-    function initFlipClocks() {
+    // 修复点1：不再清空内联 DOM，而是整体归零，且保证最低 4 位长度的物理表盘宽度
+    function initSlidingClocks() {
         estimatedTokens = 0;
         cachedTokens = 0;
-        document.getElementById('tokenFlipContainer').innerHTML = '';
-        document.getElementById('cacheFlipContainer').innerHTML = '';
-        updateFlipClock('tokenFlipContainer', 0); 
-        updateFlipClock('cacheFlipContainer', 0); 
+        updateSlidingClock('tokenFlipContainer', 0); 
+        updateSlidingClock('cacheFlipContainer', 0); 
     }
 
-    function createFlipDigit(val) {
-        const digit = document.createElement('div');
-        digit.className = 'flip-digit';
-        digit.setAttribute('data-val', val);
-        digit.innerHTML = `
-            <div class="part top"><span>${val}</span></div>
-            <div class="part bottom"><span>${val}</span></div>
-            <div class="part flap top"><span>${val}</span></div>
-            <div class="part flap bottom"><span>${val}</span></div>
-        `;
-        return digit;
-    }
-
-    function updateFlipClock(containerId, targetValue) {
+    function updateSlidingClock(containerId, targetValue) {
         const valStr = targetValue.toString();
         const container = document.getElementById(containerId);
         if(!container) return;
         
-        while(container.children.length < valStr.length) {
-            container.insertBefore(createFlipDigit('0'), container.firstChild);
+        // 核心修复：锁定最少 4 个物理数字轮，确保宽度在清理和重启时永远不会发生坍塌跳动
+        const MIN_DIGITS = 4;
+        const targetLength = Math.max(MIN_DIGITS, valStr.length);
+        
+        while(container.children.length < targetLength) {
+            const box = document.createElement('div');
+            box.className = 'sliding-digit-box';
+            const col = document.createElement('div');
+            col.className = 'sliding-digit-col';
+            for(let j = 0; j <= 9; j++) {
+                const num = document.createElement('div');
+                num.className = 'sliding-digit-num';
+                num.innerText = j;
+                col.appendChild(num);
+            }
+            box.appendChild(col);
+            container.insertBefore(box, container.firstChild);
         }
 
-        const boxes = Array.from(container.querySelectorAll('.flip-digit'));
-        const paddedStr = valStr.padStart(boxes.length, '0');
+        const cols = Array.from(container.querySelectorAll('.sliding-digit-col'));
+        const paddedStr = valStr.padStart(cols.length, '0');
 
-        boxes.forEach((box, index) => {
-            const newValue = paddedStr[index];
-            const currentVal = box.getAttribute('data-val');
-
-            if (newValue !== currentVal && !box.isFlipping) {
-                box.isFlipping = true;
-                box.setAttribute('data-val', newValue);
-
-                const top = box.querySelector('.top:not(.flap)');
-                const bottom = box.querySelector('.bottom:not(.flap)');
-                const flapTop = box.querySelector('.flap.top');
-                const flapBottom = box.querySelector('.flap.bottom');
-
-                flapTop.querySelector('span').innerText = currentVal;
-                flapBottom.querySelector('span').innerText = newValue;
-                top.querySelector('span').innerText = newValue;
-
-                box.classList.remove('flipping');
-                void box.offsetWidth; 
-                box.classList.add('flipping');
-
-                setTimeout(() => {
-                    bottom.querySelector('span').innerText = newValue;
-                    box.classList.remove('flipping');
-                    box.isFlipping = false;
-                }, 250); 
-            }
+        cols.forEach((col, index) => {
+            const digit = parseInt(paddedStr[index]);
+            col.style.transform = `translateY(-${digit * 26}px)`;
         });
     }
 
@@ -515,6 +561,159 @@
         } else {
             modal.classList.add('opacity-0', 'pointer-events-none');
             content.classList.add('scale-95');
+        }
+    }
+
+    async function toggleHistoryDrawer() {
+        const backdrop = document.getElementById('historyBackdrop');
+        const drawer = document.getElementById('historyDrawer');
+        
+        if (backdrop.classList.contains('opacity-0')) {
+            await fetchHistoryList();
+            backdrop.classList.remove('opacity-0', 'pointer-events-none');
+            drawer.classList.remove('translate-x-full');
+        } else {
+            backdrop.classList.add('opacity-0', 'pointer-events-none');
+            drawer.classList.add('translate-x-full');
+        }
+    }
+
+    async function fetchHistoryList() {
+        try {
+            const response = await fetch('/api/history');
+            allHistoryRecords = await response.json();
+            renderHistoryList();
+        } catch (error) {
+            console.error("加载历史记录失败", error);
+            showToast("加载时光机失败", "error");
+        }
+    }
+
+    function renderHistoryList() {
+        const listDiv = document.getElementById('historyList');
+        const countSpan = document.getElementById('historyCount');
+        listDiv.innerHTML = '';
+        countSpan.innerText = `${allHistoryRecords.length} / 30`;
+
+        if (allHistoryRecords.length === 0) {
+            listDiv.innerHTML = `
+                <div class="flex flex-col items-center justify-center h-48 text-gray-400 opacity-60">
+                    <svg class="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <p class="text-sm">档案馆空空如也</p>
+                </div>
+            `;
+            return;
+        }
+
+        allHistoryRecords.forEach(record => {
+            const safeSourceText = escapeHtml(record.source_text || "").substring(0, 80) + "...";
+            const tagStr = promptTypeMap[record.prompt_type] || "未知策略";
+            const modelStr = record.model_name || "未知模型";
+            
+            const card = document.createElement('div');
+            card.className = "bg-white/60 dark:bg-gray-800/60 border border-gray-200/50 dark:border-gray-700/50 rounded-[16px] p-4 shadow-sm hover:shadow-md transition-shadow group relative overflow-hidden backdrop-blur-sm";
+            card.innerHTML = `
+                <div class="flex justify-between items-center mb-2.5 gap-2">
+                    <div class="flex items-center gap-2 overflow-hidden">
+                        <span class="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-100/50 dark:bg-indigo-500/20 px-2 py-0.5 rounded-md border border-indigo-200/50 dark:border-indigo-500/20 shrink-0">${tagStr}</span>
+                        <span class="text-[11px] font-medium text-gray-500 dark:text-gray-400 bg-gray-100/80 dark:bg-gray-800/80 px-2 py-0.5 rounded-md border border-gray-200/60 dark:border-gray-700/60 truncate" title="${modelStr}">${modelStr}</span>
+                    </div>
+                    <span class="text-[11px] text-gray-400 font-mono flex items-center gap-1 shrink-0">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        ${record.timestamp.substring(5, 16)}
+                    </span>
+                </div>
+                <p class="text-[13px] text-gray-600 dark:text-gray-300 line-clamp-2 leading-relaxed mb-3.5 break-all">
+                    ${safeSourceText}
+                </p>
+                <div class="flex gap-2">
+                    <button onclick="restoreHistoryRecord('${record.id}')" class="flex-1 py-1.5 bg-indigo-500 hover:bg-indigo-600 text-white rounded-[10px] text-[12px] font-semibold transition active:scale-95 shadow-[0_2px_8px_rgba(99,102,241,0.3)]">
+                        还原现场
+                    </button>
+                    <button onclick="deleteHistoryRecord('${record.id}')" class="px-3 py-1.5 bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-[10px] transition active:scale-95 border border-transparent hover:border-red-200 dark:hover:border-red-500/30" title="彻底删除">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    </button>
+                </div>
+            `;
+            listDiv.appendChild(card);
+        });
+    }
+
+    async function restoreHistoryRecord(id) {
+        const record = allHistoryRecords.find(r => r.id === id);
+        if (!record) return;
+
+        document.getElementById('sourceText').value = record.source_text || "";
+        document.getElementById('resultText').value = record.result_text || "";
+        
+        const tContent = document.getElementById('thinkContent');
+        tContent.textContent = record.think_text || "记录创建时无思考过程";
+        tContent.scrollTop = tContent.scrollHeight;
+
+        initSlidingClocks();
+        estimatedTokens = record.total_tokens || 0;
+        cachedTokens = record.cached_tokens || 0;
+        updateSlidingClock('tokenFlipContainer', estimatedTokens);
+        updateSlidingClock('cacheFlipContainer', cachedTokens);
+        
+        const radio = document.querySelector(`input[name="promptType"][value="${record.prompt_type}"]`);
+        if(radio) {
+            radio.checked = true;
+            const index = ['paper_polish_enhance', 'polish', 'enhance', 'emotion'].indexOf(record.prompt_type);
+            moveSlider(index !== -1 ? index : 0);
+        }
+
+        handleInput(); 
+        document.getElementById('outCharCount').innerText = (record.result_text || "").length + ' 字';
+        if (isDiffEnabled) {
+            renderDiff();
+        }
+
+        toggleHistoryDrawer();
+        showToast('历史现场已完美还原', 'success');
+    }
+
+    async function deleteHistoryRecord(id) {
+        try {
+            const response = await fetch(`/api/history/${id}`, { method: 'DELETE' });
+            if (response.ok) {
+                allHistoryRecords = allHistoryRecords.filter(r => r.id !== id);
+                renderHistoryList();
+            } else {
+                showToast('删除失败', 'error');
+            }
+        } catch (error) {
+            showToast('删除失败', 'error');
+        }
+    }
+
+    async function saveCurrentTaskToHistory() {
+        try {
+            const source = document.getElementById('sourceText').value.trim();
+            const result = document.getElementById('resultText').value.trim();
+            if (!source || !result) return;
+            
+            // 抓取顶栏侦测到的真实模型名称，如果没有则获取用户输入的默认值
+            let actualModel = document.getElementById('detectedModelText').innerText;
+            if (actualModel === '等待调度...' || actualModel === '链路验证中...') {
+                actualModel = document.getElementById('model').value.trim() || "未知模型";
+            }
+            
+            await fetch('/api/history', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    source_text: source,
+                    result_text: result,
+                    think_text: globalThinkText,
+                    prompt_type: document.querySelector('input[name="promptType"]:checked').value,
+                    total_tokens: estimatedTokens,
+                    cached_tokens: cachedTokens,
+                    model_name: actualModel
+                })
+            });
+        } catch (error) {
+            console.error("历史记录存档失败:", error);
         }
     }
 
@@ -562,7 +761,81 @@
         }
     }
 
+    function toggleDiffMode() {
+        isDiffEnabled = !isDiffEnabled;
+        const sw = document.getElementById('diffSwitch');
+        const knob = document.getElementById('diffKnob');
+        const diffView = document.getElementById('diffContent');
+        const resText = document.getElementById('resultText');
+
+        if (isDiffEnabled) {
+            sw.classList.replace('bg-gray-300', 'bg-[#0071e3]');
+            sw.classList.replace('dark:bg-gray-600', 'bg-[#0071e3]');
+            knob.style.transform = 'translateX(16px)';
+            
+            diffView.classList.remove('opacity-0', 'pointer-events-none');
+            diffView.classList.add('opacity-100', 'pointer-events-auto');
+            resText.classList.remove('opacity-100', 'pointer-events-auto');
+            resText.classList.add('opacity-0', 'pointer-events-none');
+            
+            renderDiff(); 
+        } else {
+            sw.classList.replace('bg-[#0071e3]', 'bg-gray-300');
+            sw.classList.add('dark:bg-gray-600');
+            knob.style.transform = 'translateX(2px)';
+            
+            diffView.classList.remove('opacity-100', 'pointer-events-auto');
+            diffView.classList.add('opacity-0', 'pointer-events-none');
+            resText.classList.remove('opacity-0', 'pointer-events-none');
+            resText.classList.add('opacity-100', 'pointer-events-auto');
+        }
+    }
+
+    function renderDiff() {
+        if (!isDiffEnabled) return;
+        // 在对比差异时，自动剥除隐形的保护代码，防止红绿线错乱
+        const source = document.getElementById('sourceText').value.replace(/\u200B/g, '').replace(/\u200C/g, '');
+        const result = document.getElementById('resultText').value;
+        
+        if(!source && !result) {
+            document.getElementById('diffContent').innerHTML = '';
+            return;
+        }
+
+        const diffs = dmp.diff_main(source, result);
+        dmp.diff_cleanupSemantic(diffs);
+
+        let html = '';
+        for (let i = 0; i < diffs.length; i++) {
+            const type = diffs[i][0];
+            const text = escapeHtml(diffs[i][1]).replace(/\n/g, '<br>');
+            
+            if (type === 1) { 
+                html += `<ins class="diff-add">${text}</ins>`;
+            } else if (type === -1) { 
+                html += `<del class="diff-delete">${text}</del>`;
+            } else { 
+                html += `<span class="text-gray-600 dark:text-gray-400">${text}</span>`;
+            }
+        }
+        
+        const diffView = document.getElementById('diffContent');
+        diffView.innerHTML = html;
+        diffView.scrollTop = diffView.scrollHeight; 
+    }
+
+    function requestRenderDiff() {
+        if (!isDiffEnabled) return;
+        if (diffThrottleTimeout) return;
+        diffThrottleTimeout = setTimeout(() => {
+            renderDiff();
+            diffThrottleTimeout = null;
+        }, 300); 
+    }
+
     function countTextLength(text) {
+        // 计算字数时，过滤掉隐身字符
+        text = text.replace(/\u200B/g, '').replace(/\u200C/g, '');
         const zh = text.match(/[\u4e00-\u9fff]/g);
         if (zh && zh.length > 0) return zh.length;
         const en = text.match(/[a-zA-Z]/g);
@@ -584,24 +857,55 @@
         
         const color1 = 'bg-[#FF9F0A]/15 dark:bg-[#FF9F0A]/25 border-b-[2px] border-[#FF9F0A]/30';
         const color2 = 'bg-[#0A84FF]/15 dark:bg-[#0A84FF]/25 border-b-[2px] border-[#0A84FF]/30';
+        // 定义专属的安全锁配色，带有一层极其精致的内侧阴影描边
+        const lockColor = 'bg-gray-300/80 dark:bg-gray-600/80 text-gray-800 dark:text-gray-200 rounded-[3px] shadow-[0_0_0_2px_rgba(209,213,219,0.8)] dark:shadow-[0_0_0_2px_rgba(75,85,99,0.8)] relative z-10 mx-[1px]';
 
         paragraphs.forEach((para, idx) => {
             const trimmed = para.trim();
             if (!trimmed) { html += '\n'; return; }
+            
+            const match = para.match(/^(\s*)(.*?)(\s*)$/s);
+            const leadingSpace = match ? match[1] : '';
+            const coreText = match ? match[2] : trimmed;
+            const trailingSpace = match ? match[3] : '';
 
-            if (countTextLength(trimmed) <= 500) {
+            let paraHtml = "";
+
+            if (countTextLength(coreText) <= 500) {
                 const colorClass = colorToggle ? color1 : color2;
-                const match = para.match(/^(\s*)(.*?)(\s*)$/s);
-                html += `${match[1]}<span class="${colorClass} pb-[2px] rounded-[4px]">${escapeHtml(match[2])}</span>${match[3]}`;
                 colorToggle = !colorToggle;
+                
+                let currentIdx = 0;
+                let styledText = "";
+                const regex = /\u200B([^\u200C]*)\u200C/g;
+                let m;
+                // 解析隐形字符，动态渲染安全锁色块
+                while ((m = regex.exec(coreText)) !== null) {
+                    if (m.index > currentIdx) styledText += escapeHtml(coreText.substring(currentIdx, m.index));
+                    styledText += `<span class="${lockColor}">${escapeHtml(m[1])}</span>`;
+                    currentIdx = regex.lastIndex;
+                }
+                if (currentIdx < coreText.length) styledText += escapeHtml(coreText.substring(currentIdx));
+                
+                paraHtml = `<span class="${colorClass} pb-[2px] rounded-[4px]">${styledText}</span>`;
             } else {
-                const sentences = trimmed.split(/([。！？；!?;])/);
+                // 长段落切分：先暂时将免检区抽出替换，防止标点切断免检区
+                let placeholderMap = {};
+                let pCounter = 0;
+                let textWithPlaceholders = coreText.replace(/\u200B([^\u200C]*)\u200C/g, (m, p1) => {
+                    let key = `__UI_LOCK_${pCounter++}__`;
+                    placeholderMap[key] = `<span class="${lockColor}">${escapeHtml(p1)}</span>`;
+                    return key;
+                });
+
+                const sentences = textWithPlaceholders.split(/([。！？；!?;])/);
                 let currentSegment = "";
                 let currentChunkRaw = "";
-                let paraHtml = "";
+                
                 for (let i = 0; i < sentences.length; i += 2) {
                     let sentence = sentences[i];
                     if (i + 1 < sentences.length) sentence += sentences[i + 1];
+                    
                     if (countTextLength(currentSegment + sentence) <= 500) {
                         currentSegment += sentence;
                         currentChunkRaw += sentence;
@@ -620,18 +924,24 @@
                     paraHtml += `<span class="${colorClass} pb-[2px] rounded-[4px]">${escapeHtml(currentChunkRaw)}</span>`;
                     colorToggle = !colorToggle;
                 }
-                const match = para.match(/^(\s*)(.*?)(\s*)$/s);
-                html += match[1] + paraHtml + match[3];
+
+                // 还原免检区色块
+                for (let key in placeholderMap) {
+                    paraHtml = paraHtml.split(key).join(placeholderMap[key]);
+                }
             }
+
+            html += leadingSpace + paraHtml + trailingSpace;
             if (idx < paragraphs.length - 1) html += '\n';
         });
         underlay.innerHTML = html + '<br>';
     }
 
     function handleInput() {
-        const val = document.getElementById('sourceText').value;
+        const val = document.getElementById('sourceText').value.replace(/\u200B/g, '').replace(/\u200C/g, '');
         document.getElementById('charCount').innerText = val.length + ' 字';
         renderSplitVisualization();
+        requestRenderDiff(); 
     }
 
     function syncScroll() {
@@ -640,29 +950,63 @@
     window.addEventListener('resize', renderSplitVisualization);
 
     function setBadgeStatus(status, text) {
+        const badge = document.getElementById('detectedModelBadge');
         const badgeText = document.getElementById('detectedModelText');
         const pulse = document.getElementById('modelPulse');
         
-        badgeText.innerText = text;
+        // 1. 获取变化前的精确宽度，并死死锁定它
+        const startWidth = badge.offsetWidth;
+        badge.style.width = startWidth + 'px';
         
-        if (status === 'wait') {
-            pulse.className = 'w-2 h-2 rounded-full bg-gray-400 dark:bg-gray-500 transition-colors duration-300';
-            badgeText.className = 'text-[12px] font-bold text-gray-500 dark:text-gray-400 tracking-wide transition-colors duration-300';
-        } else if (status === 'active') {
-            pulse.className = 'w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)] animate-pulse transition-colors duration-300';
-            badgeText.className = 'text-[12px] font-bold text-blue-600 dark:text-blue-400 tracking-wide transition-colors duration-300';
-        }
+        // 2. 让旧文字优雅淡出
+        badgeText.style.opacity = '0';
+        
+        setTimeout(() => {
+            // 3. 偷偷替换新文字和状态颜色
+            badgeText.innerText = text;
+            
+            if (status === 'wait') {
+                pulse.className = 'w-2 h-2 rounded-full bg-gray-400 dark:bg-gray-500 transition-colors duration-300';
+                badgeText.className = 'text-[12px] font-bold text-gray-500 dark:text-gray-400 tracking-wide transition-opacity duration-300';
+                badge.className = 'flex items-center justify-center gap-2 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-3.5 py-1.5 rounded-full shadow-sm backdrop-blur-md transition-all duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)] whitespace-nowrap overflow-hidden min-w-[130px]';
+            } else if (status === 'active') {
+                pulse.className = 'w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)] animate-pulse transition-colors duration-300';
+                badgeText.className = 'text-[12px] font-bold text-blue-600 dark:text-blue-400 tracking-wide transition-opacity duration-300';
+                badge.className = 'flex items-center justify-center gap-2 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30 px-3.5 py-1.5 rounded-full shadow-sm backdrop-blur-md transition-all duration-300 ease-[cubic-bezier(0.25,0.8,0.25,1)] whitespace-nowrap overflow-hidden min-w-[130px]';
+            }
+            
+            // 4. 解除锁定，让浏览器计算新文字需要的自然宽度
+            badge.style.width = 'auto';
+            const targetWidth = badge.offsetWidth;
+            
+            // 5. 瞬间锁回旧宽度，并强制浏览器重绘 (Force Reflow)，这是阻断闪烁的关键
+            badge.style.width = startWidth + 'px';
+            void badge.offsetWidth; 
+            
+            // 6. 赋予新宽度！由于存在贝塞尔过渡动画，胶囊会极致丝滑地推开/拉回左侧元素
+            badge.style.width = targetWidth + 'px';
+            badgeText.style.opacity = '1'; // 新文字淡入
+            
+            // 7. 动画结束后，清除内联宽度，保持响应式干净
+            setTimeout(() => {
+                badge.style.width = '';
+            }, 300);
+            
+        }, 300); // 300ms 等待旧文字完全淡出
     }
 
     function clearText() {
         document.getElementById('sourceText').value = '';
         document.getElementById('resultText').value = '';
+        document.getElementById('diffContent').innerHTML = '';
         document.getElementById('thinkContent').textContent = '等待调度...';
         document.getElementById('charCount').innerText = '0 字';
         document.getElementById('outCharCount').innerText = '0 字';
         
+        if(window.LockSystem) window.LockSystem.lockMap = {};
+        
         setBadgeStatus('wait', '等待调度...');
-        initFlipClocks();
+        initSlidingClocks();
         
         globalCleanedText = ""; globalThinkText = ""; currentSegmentRaw = ""; currentSegmentThink = "";
         renderSplitVisualization();
@@ -682,8 +1026,34 @@
     }
 
     window.onload = async function() {
-        initFlipClocks();
+        initSlidingClocks();
         setBadgeStatus('wait', '等待调度...');
+        
+        // 动态加载并挂载分离的前端组件 (划词锁定模块)
+        try {
+            const htmlRes = await fetch('/static/lock_ui.html');
+            const htmlText = await htmlRes.text();
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = htmlText;
+            document.body.appendChild(tempDiv.querySelector('#lockPopup'));
+            const script = document.createElement('script');
+            script.textContent = tempDiv.querySelector('script').textContent;
+            document.body.appendChild(script);
+            setTimeout(() => { if(window.LockSystem) window.LockSystem.init(); }, 100);
+        } catch(e) { console.warn("动态加载划词锁定组件跳过", e); }
+        
+        // ✨ 新增：动态加载全屏透视镜组件 (Inspector UI)
+        try {
+            const insRes = await fetch('/static/inspector_ui.html');
+            const insText = await insRes.text();
+            const insDiv = document.createElement('div');
+            insDiv.innerHTML = insText;
+            document.body.appendChild(insDiv.querySelector('#inspectorOverlay'));
+            const insScript = document.createElement('script');
+            insScript.textContent = insDiv.querySelector('script').textContent;
+            document.body.appendChild(insScript);
+            setTimeout(() => { if(window.InspectorSystem) window.InspectorSystem.init(); }, 100);
+        } catch(e) { console.warn("动态加载透视镜组件失败", e); }
         
         try {
             const response = await fetch('/api/config');
@@ -779,6 +1149,11 @@
         let displayClean = globalCleanedText + (globalCleanedText && tempClean ? "\n\n" : "") + tempClean;
         let displayThink = globalThinkText + tempThink;
         
+        // 在打字机流式输出的最终渲染环节，把后端返回的占位符无缝还原回原始文字
+        if(window.LockSystem) {
+            displayClean = window.LockSystem.decodeFromBackend(displayClean);
+        }
+        
         const resText = document.getElementById('resultText');
         resText.value = displayClean;
         resText.scrollTop = resText.scrollHeight;
@@ -789,6 +1164,8 @@
             tContent.textContent = displayThink || (globalThinkText ? globalThinkText : "当前引擎未返回原生思考链路。");
             tContent.scrollTop = tContent.scrollHeight;
         }
+
+        requestRenderDiff();
     }
 
     function stopOptimization() {
@@ -806,11 +1183,16 @@
         const apiKey = document.getElementById('apiKey').value.trim();
         const baseUrl = document.getElementById('baseUrl').value.trim();
         const model = document.getElementById('model').value.trim();
-        const text = document.getElementById('sourceText').value.trim();
+        let text = document.getElementById('sourceText').value.trim();
         const promptType = document.querySelector('input[name="promptType"]:checked').value;
 
         if (!text) { showToast("输入源不可为空", "error"); return; }
         if (!apiKey) { toggleSettings(); showToast("系统拦截: 请键入 API Key", "info"); return; }
+        
+        // 核心：在发送给后端前，把隐身锁定的文字编码为后端可见的 [PROTECTED_X] 占位符
+        if(window.LockSystem) {
+            text = window.LockSystem.encodeForBackend(text);
+        }
 
         btn.disabled = true;
         btn.innerHTML = `<span class="loader"></span>建立链路中...`;
@@ -820,10 +1202,11 @@
         requestAnimationFrame(() => stopBtn.classList.replace('fade-slide-enter', 'fade-slide-active'));
         
         document.getElementById('resultText').value = '';
+        document.getElementById('diffContent').innerHTML = ''; 
         globalCleanedText = ""; globalThinkText = ""; currentSegmentRaw = ""; currentSegmentThink = "";
         
         setBadgeStatus('active', '链路验证中...');
-        initFlipClocks(); 
+        initSlidingClocks(); 
         
         progressBar.style.opacity = '1';
         progressBar.style.width = '2%';
@@ -878,6 +1261,7 @@
                             
                             currentSegmentRaw = ""; currentSegmentThink = "";
                             document.getElementById('resultText').value = '';
+                            document.getElementById('diffContent').innerHTML = '';
                             document.getElementById('thinkContent').textContent = globalThinkText;
                         }
                         else if (data.status === 'meta') {
@@ -887,11 +1271,11 @@
                             if (data.usage) {
                                 if (data.usage.total) {
                                     estimatedTokens = data.usage.total;
-                                    updateFlipClock('tokenFlipContainer', estimatedTokens);
+                                    updateSlidingClock('tokenFlipContainer', estimatedTokens);
                                 }
                                 if (data.usage.cached) {
                                     cachedTokens = data.usage.cached;
-                                    updateFlipClock('cacheFlipContainer', cachedTokens);
+                                    updateSlidingClock('cacheFlipContainer', cachedTokens);
                                 }
                             }
                         }
@@ -909,12 +1293,12 @@
                         } else if (data.status === 'typing') {
                             currentSegmentRaw += data.content;
                             estimatedTokens += Math.max(1, Math.floor(data.content.length * 0.7));
-                            updateFlipClock('tokenFlipContainer', estimatedTokens);
+                            updateSlidingClock('tokenFlipContainer', estimatedTokens);
                             updateStreamingUI();
                         } else if (data.status === 'thinking') {
                             currentSegmentThink += data.content;
                             estimatedTokens += Math.max(1, Math.floor(data.content.length * 0.7));
-                            updateFlipClock('tokenFlipContainer', estimatedTokens);
+                            updateSlidingClock('tokenFlipContainer', estimatedTokens);
                             updateStreamingUI();
                         } else if (data.status === 'segment_end') {
                             globalCleanedText += (globalCleanedText && data.content ? "\n\n" : "") + data.content;
@@ -936,6 +1320,10 @@
                             setBadgeStatus('wait', document.getElementById('detectedModelText').innerText + ' (就绪)');
                             restoreUI(); 
                             
+                            if(isDiffEnabled) renderDiff(); 
+                            
+                            saveCurrentTaskToHistory();
+
                             if(cachedTokens > 0) {
                                 showToast(`任务完成！缓存帮您节省了 ${cachedTokens} 个 Tokens！`, 'success');
                             } else {

@@ -19,10 +19,23 @@ from prompts import (
     get_emotion_polish_prompt
 )
 
+# 导入全新的历史记录时光机引擎
+from history_manager import load_history, add_record, delete_record
+
+# 导入独立解耦的局部免检防护引擎
+from protector import get_protection_prompt_addition, is_segment_fully_protected
+
+# ✨ 新增：导入刚才独立编写的智能探针引擎
+from inspector_api import router as inspector_router
+
 app = FastAPI(title="AI降重系统 API")
 
 os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# ✨ 新增：将智能探针路由挂载到主程序
+app.include_router(inspector_router)
+
 CONFIG_FILE = "config.json"
 
 LAST_HEARTBEAT = time.time()
@@ -33,10 +46,20 @@ class OptimizeRequest(BaseModel):
     base_url: str
     model: str
     prompt_type: str
-    is_think: bool = False  # 接收前端深度思考开关指令
+    is_think: bool = False
 
 class DeleteConfigRequest(BaseModel):
     index: int
+
+# 新增：接收前端历史记录保存的数据模型
+class HistoryRequest(BaseModel):
+    source_text: str
+    result_text: str
+    think_text: str
+    prompt_type: str
+    total_tokens: int
+    cached_tokens: int
+    model_name: str = "未知模型"
 
 def load_local_config():
     if os.path.exists(CONFIG_FILE):
@@ -83,6 +106,35 @@ def delete_config(req: DeleteConfigRequest):
         except Exception:
             pass
     return {"status": "success"}
+
+# --- 全新：时光机 API 接口群 ---
+@app.get("/api/history")
+def get_task_history():
+    """获取所有历史记录"""
+    return load_history()
+
+@app.post("/api/history")
+def save_task_history(req: HistoryRequest):
+    """保存一条新的任务记录"""
+    record = add_record(
+        source_text=req.source_text,
+        result_text=req.result_text,
+        think_text=req.think_text,
+        prompt_type=req.prompt_type,
+        total_tokens=req.total_tokens,
+        cached_tokens=req.cached_tokens,
+        model_name=req.model_name
+    )
+    return {"status": "success", "id": record["id"]}
+
+@app.delete("/api/history/{record_id}")
+def delete_task_history(record_id: str):
+    """删除指定的历史记录"""
+    success = delete_record(record_id)
+    if success:
+        return {"status": "success"}
+    raise HTTPException(status_code=400, detail="删除失败")
+# -------------------------------
 
 @app.get("/api/heartbeat")
 def heartbeat():
@@ -154,31 +206,21 @@ async def optimize_text(req: OptimizeRequest):
         segments = split_text_into_segments(req.text)
         yield json.dumps({"status": "progress", "message": f"长文已智能切分为 {len(segments)} 段..."}) + "\n"
         
-        # ---------------- 全网大模型深度思考自适应引擎 ----------------
         extra_body = {}
         model_lower = req.model.lower()
         active_model = req.model
         
-        # 1. DeepSeek 适配
         if "deepseek" in model_lower:
             if not req.is_think and "reasoner" in model_lower:
                 active_model = req.model.replace("reasoner", "chat")
             elif req.is_think and "chat" in model_lower:
                 active_model = req.model.replace("chat", "reasoner")
-        
-        # 2. 阿里云千问 (Qwen) 适配
         elif "qwen" in model_lower:
             extra_body["enable_thinking"] = req.is_think
-            
-        # 3. 智谱 (GLM) 适配
         elif "glm" in model_lower or "zhipu" in model_lower:
             extra_body["thinking"] = {"type": "enabled" if req.is_think else "disabled"}
-            
-        # 4. OpenAI (o1/o3) 适配
         elif "o1" in model_lower or "o3" in model_lower:
             extra_body["reasoning_effort"] = "high" if req.is_think else "low"
-            
-        # 5. Claude 适配
         elif "claude" in model_lower:
             if req.is_think:
                 extra_body["thinking"] = {"type": "enabled", "budget_tokens": 2048}
@@ -201,6 +243,9 @@ async def optimize_text(req: OptimizeRequest):
                 system_prompt = get_default_polish_prompt()
                 task_instruction = "请处理以下文本："
 
+            # 动态注入划词锁定保护指令
+            system_prompt += get_protection_prompt_addition()
+
             history = []
             results = []
             current_model_sent = False
@@ -208,6 +253,13 @@ async def optimize_text(req: OptimizeRequest):
             for idx, p in enumerate(stage_segments):
                 yield ("chunk", json.dumps({"status": "progress", "message": f"{stage_name}: 正在处理 {idx+1}/{len(stage_segments)} 段..."}) + "\n")
                 yield ("chunk", json.dumps({"status": "segment_start"}) + "\n")
+
+                # 【极致省流】：如果检测到该段落全是 [PROTECTED] 占位符，直接秒级闪避，不调用大模型
+                if is_segment_fully_protected(p):
+                    yield ("chunk", json.dumps({"status": "typing", "content": p}) + "\n")
+                    yield ("chunk", json.dumps({"status": "segment_end", "content": p}) + "\n")
+                    results.append(p)
+                    continue
 
                 messages = [{"role": "system", "content": system_prompt + f"\n\n{task_instruction}"}]
                 
@@ -237,22 +289,14 @@ async def optimize_text(req: OptimizeRequest):
                             yield ("chunk", json.dumps({"status": "meta", "model": chunk.model}) + "\n")
                             current_model_sent = True
                             
-                        # -------------- 全新截获：深度捕获命中缓存 (Cached Tokens) --------------
                         if hasattr(chunk, 'usage') and chunk.usage:
                             usage_dict = {"total": chunk.usage.total_tokens}
-                            
-                            # 获取 OpenAI / Qwen 格式的 prompt_tokens_details
                             if hasattr(chunk.usage, 'prompt_tokens_details') and chunk.usage.prompt_tokens_details:
                                 cached = getattr(chunk.usage.prompt_tokens_details, 'cached_tokens', 0)
-                                if cached:
-                                    usage_dict["cached"] = cached
-                                    
-                            # 获取 DeepSeek 格式的缓存属性
+                                if cached: usage_dict["cached"] = cached
                             elif hasattr(chunk.usage, 'prompt_cache_hit_tokens'):
                                 cached = getattr(chunk.usage, 'prompt_cache_hit_tokens', 0)
-                                if cached:
-                                    usage_dict["cached"] = cached
-                                    
+                                if cached: usage_dict["cached"] = cached
                             yield ("chunk", json.dumps({"status": "meta", "usage": usage_dict}) + "\n")
 
                         if not chunk.choices:
@@ -323,6 +367,6 @@ def start_browser():
 
 if __name__ == "__main__":
     threading.Timer(0, start_browser).start()
-    #threading.Thread(target=monitor_heartbeat, daemon=True).start()
+    # threading.Thread(target=monitor_heartbeat, daemon=True).start()
     print("正在启动 AI降重系统 核心引擎...")
     uvicorn.run(app, host="127.0.0.1", port=8000, log_level="warning")

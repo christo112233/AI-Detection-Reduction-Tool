@@ -1,0 +1,108 @@
+<!-- 划词锁定的悬浮行动按钮 (Action Popup) -->
+<div id="lockPopup" class="fixed z-50 hidden opacity-0 transition-opacity duration-200 pointer-events-auto">
+    <button onclick="window.LockSystem.applyLock()" class="flex items-center gap-1.5 px-3 py-[6px] bg-gray-800/95 dark:bg-gray-100/95 text-white dark:text-black rounded-[8px] shadow-xl text-[13px] font-semibold hover:bg-gray-700 dark:hover:bg-white active:scale-95 backdrop-blur-md border border-white/10 dark:border-black/10">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+        设为免检区
+    </button>
+</div>
+
+<script>
+    window.LockSystem = {
+        lockMap: {}, // 存储 [PROTECTED_X] 到 原文 的映射字典
+        
+        init: function() {
+            const textarea = document.getElementById('sourceText');
+            if(!textarea) return;
+            
+            // 监听鼠标划词和键盘选词
+            textarea.addEventListener('mouseup', this.handleSelection.bind(this));
+            textarea.addEventListener('keyup', this.handleSelection.bind(this));
+            document.addEventListener('mousedown', (e) => {
+                if (e.target.id !== 'sourceText' && !e.target.closest('#lockPopup')) this.hidePopup();
+            });
+        },
+        
+        handleSelection: function(e) {
+            const textarea = document.getElementById('sourceText');
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const selectedText = textarea.value.substring(start, end).trim();
+            
+            if (start !== end && selectedText.length > 0) {
+                const popup = document.getElementById('lockPopup');
+                // 动态计算悬浮窗位置
+                let x = e.clientX || textarea.getBoundingClientRect().left + textarea.offsetWidth / 2;
+                let y = e.clientY || textarea.getBoundingClientRect().top + textarea.offsetHeight / 2;
+                
+                popup.style.left = `${x}px`;
+                popup.style.top = `${y - 40}px`; // 显示在鼠标上方一点
+                popup.classList.remove('hidden');
+                setTimeout(() => popup.classList.remove('opacity-0'), 10);
+            } else {
+                this.hidePopup();
+            }
+        },
+        
+        hidePopup: function() {
+            const popup = document.getElementById('lockPopup');
+            popup.classList.add('opacity-0');
+            setTimeout(() => popup.classList.add('hidden'), 200);
+        },
+        
+        applyLock: function() {
+            const textarea = document.getElementById('sourceText');
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            if (start !== end) {
+                const text = textarea.value;
+                const selected = text.substring(start, end);
+                
+                // 清理内部可能重叠的标记，防止嵌套锁
+                const cleanedSelection = selected.replace(/\u200B/g, '').replace(/\u200C/g, '');
+                
+                // \u200B 和 \u200C 是零宽不可见字符，相当于给文字穿上隐身衣
+                const newText = text.substring(0, start) + '\u200B' + cleanedSelection + '\u200C' + text.substring(end);
+                textarea.value = newText;
+                this.hidePopup();
+                
+                // 触发全局渲染更新
+                if(typeof window.handleInput === 'function') window.handleInput();
+                
+                // 保持选中状态
+                textarea.setSelectionRange(start + 1, start + 1 + cleanedSelection.length);
+            }
+        },
+        
+        clearAllLocks: function() {
+            const textarea = document.getElementById('sourceText');
+            // 一键褪去所有隐身衣
+            textarea.value = textarea.value.replace(/\u200B/g, '').replace(/\u200C/g, '');
+            this.lockMap = {};
+            if(typeof window.handleInput === 'function') window.handleInput();
+            if(typeof window.showToast === 'function') window.showToast('所有免检区已解除', 'success');
+        },
+        
+        // 【核心】：发给后端前，把隐身衣替换成占位符
+        encodeForBackend: function(text) {
+            this.lockMap = {};
+            let counter = 0;
+            const regex = /\u200B([^\u200C]*)\u200C/g;
+            return text.replace(regex, (match, p1) => {
+                const key = `[PROTECTED_${counter}]`;
+                this.lockMap[key] = p1;
+                counter++;
+                return key;
+            });
+        },
+        
+        // 【核心】：从后端接收时，把占位符还原成原来的文字
+        decodeFromBackend: function(text) {
+            if (!text) return text;
+            let decoded = text;
+            for (const [key, val] of Object.entries(this.lockMap)) {
+                decoded = decoded.split(key).join(val);
+            }
+            return decoded;
+        }
+    };
+</script>
