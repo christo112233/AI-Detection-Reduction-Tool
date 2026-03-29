@@ -23,55 +23,65 @@
         },
         
         handleSelection: function(e) {
-            const textarea = document.getElementById('sourceText');
-            const start = textarea.selectionStart;
-            const end = textarea.selectionEnd;
-            const selectedText = textarea.value.substring(start, end).trim();
-            
-            if (start !== end && selectedText.length > 0) {
-                const popup = document.getElementById('lockPopup');
-                // 动态计算悬浮窗位置
-                let x = e.clientX || textarea.getBoundingClientRect().left + textarea.offsetWidth / 2;
-                let y = e.clientY || textarea.getBoundingClientRect().top + textarea.offsetHeight / 2;
-                
-                popup.style.left = `${x}px`;
-                popup.style.top = `${y - 40}px`; // 显示在鼠标上方一点
-                popup.classList.remove('hidden');
-                setTimeout(() => popup.classList.remove('opacity-0'), 10);
-            } else {
-                this.hidePopup();
-            }
-        },
+    const textarea = document.getElementById('sourceText');
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = textarea.value.substring(start, end).trim();
+    
+    if (start !== end && selectedText.length > 0) {
+        const popup = document.getElementById('lockPopup');
+        let x = e.clientX || textarea.getBoundingClientRect().left + textarea.offsetWidth / 2;
+        let y = e.clientY || textarea.getBoundingClientRect().top + textarea.offsetHeight / 2;
         
-        hidePopup: function() {
-            const popup = document.getElementById('lockPopup');
-            popup.classList.add('opacity-0');
-            setTimeout(() => popup.classList.add('hidden'), 200);
-        },
-        
-        applyLock: function() {
-            const textarea = document.getElementById('sourceText');
-            const start = textarea.selectionStart;
-            const end = textarea.selectionEnd;
-            if (start !== end) {
-                const text = textarea.value;
-                const selected = text.substring(start, end);
-                
-                // 清理内部可能重叠的标记，防止嵌套锁
-                const cleanedSelection = selected.replace(/\u200B/g, '').replace(/\u200C/g, '');
-                
-                // \u200B 和 \u200C 是零宽不可见字符，相当于给文字穿上隐身衣
-                const newText = text.substring(0, start) + '\u200B' + cleanedSelection + '\u200C' + text.substring(end);
-                textarea.value = newText;
-                this.hidePopup();
-                
-                // 触发全局渲染更新
-                if(typeof window.handleInput === 'function') window.handleInput();
-                
-                // 保持选中状态
-                textarea.setSelectionRange(start + 1, start + 1 + cleanedSelection.length);
-            }
-        },
+        popup.style.left = `${x}px`;
+        popup.style.top = `${y - 40}px`;
+        popup.classList.remove('hidden');
+        setTimeout(() => popup.classList.remove('opacity-0'), 10);
+    } else {
+        this.hidePopup();
+    }
+},
+
+hidePopup: function() {
+    const popup = document.getElementById('lockPopup');
+    popup.classList.add('opacity-0');
+    setTimeout(() => popup.classList.add('hidden'), 200);
+},
+
+applyLock: function() {
+    const textarea = document.getElementById('sourceText');
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    if (start !== end) {
+        const text = textarea.value;
+        const prefix = text.substring(0, start);
+        const selected = text.substring(start, end);
+
+        // 计算当前是否已经在锁定区内
+        const openCount = (prefix.match(/\u200B/g) || []).length;
+        const closeCount = (prefix.match(/\u200C/g) || []).length;
+        const isInsideLocked = openCount > closeCount;
+
+        // ✅ 关键：如果已经在锁内，直接跳过，禁止嵌套
+        if (isInsideLocked) {
+            this.hidePopup();
+            return;
+        }
+
+        // 清理内部重叠标记
+        const cleanedSelection = selected.replace(/\u200B/g, '').replace(/\u200C/g, '');
+
+        // 包裹隐形标记
+        const newText = text.substring(0, start) + '\u200B' + cleanedSelection + '\u200C' + text.substring(end);
+        textarea.value = newText;
+        this.hidePopup();
+
+        if (typeof window.handleInput === 'function') window.handleInput();
+
+        // 保持选中
+        textarea.setSelectionRange(start + 1, start + 1 + cleanedSelection.length);
+    }
+},
         
         clearAllLocks: function() {
             const textarea = document.getElementById('sourceText');

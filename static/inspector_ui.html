@@ -134,47 +134,122 @@ window.InspectorSystem = {
     
     handleSelection: function(e) {
         const selection = window.getSelection();
-        const text = selection.toString().trim();
-        if (text.length > 0) {
-            let node = selection.anchorNode;
+        const rawText = selection.toString();
+        const text = rawText.trim();
+        
+        if (text.length > 0 && selection.rangeCount > 0) {
+            let range = selection.getRangeAt(0);
+            let node = range.startContainer;
+            let textContainer = node.parentElement ? node.parentElement.closest('.flex-1') : null;
             let card = node.parentElement ? node.parentElement.closest('.inspector-card') : null;
-            if (card) {
-                this.currentSelection = {
-                    text: text,
-                    paraIdx: parseInt(card.getAttribute('data-idx'))
-                };
-                const popup = document.getElementById('inspectorLockPopup');
-                popup.style.left = `${e.clientX}px`;
-                popup.style.top = `${e.clientY - 40}px`;
-                popup.classList.remove('hidden');
-                setTimeout(() => popup.classList.remove('opacity-0'), 10);
-                return;
+            
+            if (card && textContainer) {
+                try {
+                    let preRange = document.createRange();
+                    preRange.selectNodeContents(textContainer);
+                    preRange.setEnd(range.startContainer, range.startOffset);
+                    let preText = preRange.toString();
+                    
+                    // 兼容旧版浏览器的前导空格剔除
+                    let trimStartOffset = rawText.trimStart ? (rawText.length - rawText.trimStart().length) : (rawText.length - rawText.replace(/^\s+/, '').length);
+                    if (trimStartOffset > 0) {
+                        preText += rawText.substring(0, trimStartOffset);
+                    }
+                    
+                    let occurrenceIndex = 0;
+                    let searchIdx = preText.indexOf(text);
+                    while (searchIdx !== -1) {
+                        occurrenceIndex++;
+                        searchIdx = preText.indexOf(text, searchIdx + 1);
+                    }
+                    
+                    this.currentSelection = {
+                        paraIdx: parseInt(card.getAttribute('data-idx')),
+                        text: text,
+                        occurrenceIndex: occurrenceIndex
+                    };
+                    
+                    const popup = document.getElementById('inspectorLockPopup');
+                    if(popup) {
+                        popup.style.left = `${e.clientX}px`;
+                        popup.style.top = `${e.clientY - 40}px`;
+                        popup.classList.remove('hidden');
+                        setTimeout(() => popup.classList.remove('opacity-0'), 10);
+                    }
+                    return;
+                } catch (err) {
+                    console.error("解析划词坐标失败:", err);
+                }
             }
         }
         this.hidePopup();
     },
     
+    // ✨ 这个函数之前被你不小心删掉了，现在补回来！
     hidePopup: function() {
         const popup = document.getElementById('inspectorLockPopup');
-        popup.classList.add('opacity-0');
-        setTimeout(() => popup.classList.add('hidden'), 200);
+        if (popup) {
+            popup.classList.add('opacity-0');
+            setTimeout(() => popup.classList.add('hidden'), 200);
+        }
     },
     
     applyWordLock: function() {
-        if (this.currentSelection) {
-            const idx = this.currentSelection.paraIdx;
-            const text = this.currentSelection.text;
-            let p = this.paragraphs[idx];
-            
-            if (!this.isFullyLocked(p)) {
-                const cleanText = text.replace(/\u200B/g, '').replace(/\u200C/g, '');
-                // 简单高效的第一次出现替换法
-                this.paragraphs[idx] = p.replace(cleanText, '\u200B' + cleanText + '\u200C');
-                this.render();
+        try {
+            if (this.currentSelection) {
+                const { paraIdx, text, occurrenceIndex } = this.currentSelection;
+                let p = this.paragraphs[paraIdx];
+                
+                if (p && !this.isFullyLocked(p)) {
+                    let cleanChars = [];
+                    let locked =[];
+                    let isLocked = false;
+                    
+                    // 1. 还原纯字符数组和状态
+                    for (let i = 0; i < p.length; i++) {
+                        if (p[i] === '\u200B') isLocked = true;
+                        else if (p[i] === '\u200C') isLocked = false;
+                        else { cleanChars.push(p[i]); locked.push(isLocked); }
+                    }
+                    
+                    let plainText = cleanChars.join('');
+                    let matchStart = -1;
+                    let currentMatch = 0;
+                    let searchIdx = plainText.indexOf(text);
+                    
+                    // 2. 精准定位第 N 次出现的位置
+                    while (searchIdx !== -1) {
+                        if (currentMatch === occurrenceIndex) { matchStart = searchIdx; break; }
+                        currentMatch++;
+                        searchIdx = plainText.indexOf(text, searchIdx + 1);
+                    }
+                    
+                    // 3. 锁定区间
+                    if (matchStart !== -1) {
+                        for (let i = matchStart; i < matchStart + text.length; i++) locked[i] = true;
+                    }
+                    
+                    // 4. 状态机重新组装
+                    let newP = "";
+                    let currentlyLocked = false;
+                    for (let i = 0; i < cleanChars.length; i++) {
+                        if (locked[i] && !currentlyLocked) { newP += '\u200B'; currentlyLocked = true; }
+                        else if (!locked[i] && currentlyLocked) { newP += '\u200C'; currentlyLocked = false; }
+                        newP += cleanChars[i];
+                    }
+                    if (currentlyLocked) newP += '\u200C';
+                    
+                    this.paragraphs[paraIdx] = newP;
+                    this.render();
+                }
             }
+        } catch (err) {
+            console.error("执行锁定失败:", err);
+        } finally {
+            // ✨ 放在 finally 中，哪怕上面有任何报错，也能保证强制隐藏悬浮窗，不影响后续系统流转！
+            this.hidePopup();
+            if (window.getSelection) window.getSelection().removeAllRanges();
         }
-        this.hidePopup();
-        window.getSelection().removeAllRanges();
     },
     
     render: function() {

@@ -83,6 +83,7 @@
             background: rgba(44, 44, 46, 0.6);
             border: 1px solid rgba(255, 255, 255, 0.1);
             color: #f5f5f7;
+            color-scheme: dark;
         }
         .apple-input:focus {
             background: #ffffff;
@@ -140,6 +141,23 @@
         
         .fade-slide-enter { opacity: 0; transform: translateX(10px); pointer-events: none; }
         .fade-slide-active { opacity: 1; transform: translateX(0); pointer-events: auto; transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); }
+
+
+        /* ================= 呼吸光效 ================= */
+        @keyframes glow-breathe-green {
+            0%, 100% { box-shadow: 0 0 2px rgba(34, 197, 94, 0.1), inset 0 0 2px rgba(34, 197, 94, 0.05); }
+            50% { box-shadow: 0 0 12px rgba(34, 197, 94, 0.5), inset 0 0 6px rgba(34, 197, 94, 0.2); border-color: rgba(34, 197, 94, 0.6); }
+        }
+        @keyframes glow-breathe-red {
+            0%, 100% { box-shadow: 0 0 2px rgba(239, 68, 68, 0.1), inset 0 0 2px rgba(239, 68, 68, 0.05); }
+            50% { box-shadow: 0 0 12px rgba(239, 68, 68, 0.6), inset 0 0 6px rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.7); }
+        }
+        .breathe-green {
+            animation: glow-breathe-green 2.5s infinite ease-in-out;
+        }
+        .breathe-red {
+            animation: glow-breathe-red 2s infinite ease-in-out; /* 离线时呼吸急促一点 */
+        }
 
         /* ================= 物理滚轮时钟 (Token计数) ================= */
         .sliding-clock-wrapper { display: inline-flex; gap: 2px; }
@@ -244,6 +262,29 @@
             <div>
                 <label class="block text-gray-500 dark:text-gray-400 mb-1.5 font-medium">选用模型 (Model)</label>
                 <input type="text" id="model" oninput="clearDropdownSelection()" placeholder="qwen-max / deepseek-chat" class="apple-input w-full px-4 py-3 rounded-xl">
+            </div>
+
+            <div class="pt-2 border-t border-gray-200/60 dark:border-gray-700/60">
+                <div class="flex items-center justify-between mt-2 cursor-pointer" onclick="toggleRateLimitUI()">
+                    <label class="text-gray-600 dark:text-gray-300 font-bold flex items-center gap-2 cursor-pointer">
+                        <svg class="w-[18px] h-[18px] text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4"></path></svg>
+                        API 限流保护 (防封策略)
+                    </label>
+                    <div id="rateLimitSwitch" class="w-[36px] h-[20px] bg-gray-300 dark:bg-gray-600 rounded-full relative toggle-switch">
+                        <div id="rateLimitKnob" class="w-[16px] h-[16px] bg-white rounded-full absolute top-[2px] left-[2px] shadow-sm toggle-knob" style="transform: translateX(2px);"></div>
+                    </div>
+                </div>
+                
+                <div id="rateLimitSettings" class="hidden grid grid-cols-2 gap-4 mt-4 bg-gray-50/50 dark:bg-gray-800/30 p-3.5 rounded-xl border border-gray-100 dark:border-gray-700/50">
+                    <div>
+                        <label class="block text-[12px] text-gray-500 dark:text-gray-400 mb-1 font-medium">连续处理段落数</label>
+                        <input type="number" id="batchSize" value="20" min="1" class="apple-input w-full px-3 py-2 rounded-lg text-[13px]">
+                    </div>
+                    <div>
+                        <label class="block text-[12px] text-gray-500 dark:text-gray-400 mb-1 font-medium">冷却时间(秒)</label>
+                        <input type="number" id="batchDelay" value="60" min="1" class="apple-input w-full px-3 py-2 rounded-lg text-[13px]">
+                    </div>
+                </div>
             </div>
             <button onclick="toggleSettings()" class="w-full mt-4 py-3 bg-gray-800 dark:bg-gray-100 text-white dark:text-black rounded-xl font-semibold hover:opacity-90 active:scale-95 transition-all">确认并持久化保存</button>
         </div>
@@ -435,11 +476,14 @@
 
 <script>
     let configHistoryData = [];
+    let isRateLimitEnabled = false;
     let isSplitEnabled = true;
     let isThinkEnabled = false;
     let isDiffEnabled = false;
     let abortController = null;
+    let cooldownInterval = null; //用于存放倒计时的定时器
     let dmp = new diff_match_patch();
+    let isDeepVeriOnline = false;
 
     let globalCleanedText = "";
     let globalThinkText = "";
@@ -461,25 +505,35 @@
     setInterval(() => { fetch('/api/heartbeat').catch(() => {}); }, 3000);
     
     async function checkDeepVeriHealth() {
+        const badge = document.getElementById('dvHealthBadge');
+        const dot = document.getElementById('dvHealthDot');
+        const text = document.getElementById('dvHealthText');
+        
         try {
             const res = await fetch('/api/detect/health');
             const data = await res.json();
-            const badge = document.getElementById('dvHealthBadge');
-            const dot = document.getElementById('dvHealthDot');
-            const text = document.getElementById('dvHealthText');
             
             if (data.status === 'online') {
-                badge.className = 'flex items-center justify-center gap-1.5 bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-800 px-3 py-1.5 rounded-full shadow-sm transition-all duration-300 cursor-default';
-                dot.className = 'w-2 h-2 rounded-full bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.6)] animate-pulse';
+                isDeepVeriOnline = true; // ✨ 标记在线
+                badge.className = 'flex items-center justify-center gap-1.5 bg-green-50/80 dark:bg-green-500/10 border border-green-300/50 dark:border-green-700/50 px-3 py-1.5 rounded-full transition-all duration-300 cursor-default breathe-green';
+                dot.className = 'w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.9)]';
                 text.className = 'text-[11px] font-bold text-green-600 dark:text-green-400';
-                text.innerText = '检测节点在线';
+                text.innerText = 'DeepVeri已上线';
             } else {
-                badge.className = 'flex items-center justify-center gap-1.5 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-800 px-3 py-1.5 rounded-full shadow-sm transition-all duration-300 cursor-default';
-                dot.className = 'w-2 h-2 rounded-full bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.6)]';
+                isDeepVeriOnline = false; // ✨ 标记离线
+                badge.className = 'flex items-center justify-center gap-1.5 bg-red-50/80 dark:bg-red-500/10 border border-red-300/50 dark:border-red-700/50 px-3 py-1.5 rounded-full transition-all duration-300 cursor-default breathe-red';
+                dot.className = 'w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.9)]';
                 text.className = 'text-[11px] font-bold text-red-600 dark:text-red-400';
-                text.innerText = '检测节点离线';
+                text.innerText = 'DeepVeri已离线';
             }
-        } catch(e) {}
+        } catch(e) {
+            // ✨ 修复：当检测后端彻底崩掉抛出网络异常时，UI 也能正确变成红色的离线状态
+            isDeepVeriOnline = false; 
+            badge.className = 'flex items-center justify-center gap-1.5 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-800 px-3 py-1.5 rounded-full shadow-sm transition-all duration-300 cursor-default';
+            dot.className = 'w-2 h-2 rounded-full bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.6)]';
+            text.className = 'text-[11px] font-bold text-red-600 dark:text-red-400';
+            text.innerText = 'DeepVeri已离线';
+        }
     }
     // 每 3 秒拉取一次检测微服务状态
     setInterval(checkDeepVeriHealth, 3000);
@@ -530,6 +584,30 @@
         document.documentElement.classList.toggle('dark');
         localStorage.theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
     }
+
+    function toggleRateLimitUI() {
+        isRateLimitEnabled = !isRateLimitEnabled;
+        const knob = document.getElementById('rateLimitKnob');
+        const switchBg = document.getElementById('rateLimitSwitch');
+        const settingsDiv = document.getElementById('rateLimitSettings');
+        
+        knob.style.transform = isRateLimitEnabled ? 'translateX(16px)' : 'translateX(2px)';
+        if(isRateLimitEnabled) {
+            switchBg.className = 'w-[36px] h-[20px] bg-[#34C759] rounded-full relative toggle-switch';
+            settingsDiv.classList.remove('hidden');
+        } else {
+            switchBg.className = 'w-[36px] h-[20px] bg-gray-300 dark:bg-gray-600 rounded-full relative toggle-switch';
+            settingsDiv.classList.add('hidden');
+        }
+        // 实时保存到 localStorage
+        localStorage.setItem('rateLimitEnabled', isRateLimitEnabled);
+    }
+
+    // 监听输入框变化并保存
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('batchSize').addEventListener('change', (e) => localStorage.setItem('batchSize', e.target.value));
+        document.getElementById('batchDelay').addEventListener('change', (e) => localStorage.setItem('batchDelay', e.target.value));
+    });
 
     function toggleSettings() {
         const modal = document.getElementById('settingsModal');
@@ -822,12 +900,22 @@
     }
 
     async function runAigcDetection(autoShow = true) {
+        // 秒级拦截：直接读取顶部指示灯的文字状态
+        const dvStatusText = document.getElementById('dvHealthText').innerText;
+        if (dvStatusText.includes('离线') || dvStatusText.includes('侦测中')) {
+            if (autoShow) showToast("DeepVeri节点未就绪，请检查5005端口！", "error");
+            return;
+        }
+        
         const source = document.getElementById('sourceText').value.replace(/[\u200B\u200C]/g, '').trim();
         const result = document.getElementById('resultText').value.trim();
         const btn = document.getElementById('detectBtn');
         const topBadge = document.getElementById('topAiBadge');
         
-        if (!source && !result) return showToast("文本区为空", "error");
+        if (!source && !result) {
+            if (autoShow) showToast("文本区为空", "error");
+            return;
+        }
 
         btn.disabled = true;
         btn.innerHTML = `<span class="loader !w-3 !h-3 !mr-1"></span>分析中...`;
@@ -839,6 +927,12 @@
                 body: JSON.stringify({ source_text: source, result_text: result })
             });
             const data = await response.json();
+            
+            // ✨ 新增逻辑：接住后端“守门员”打回的错误信号，并恢复按钮状态
+            if (data.status === 'error') {
+                if (autoShow) showToast(data.message || "检测节点未响应", "error");
+                return; // 直接退出，代码会走到 finally 自动恢复按钮
+            }
             
             if (data.status === 'success') {
                 lastDetectReportData = data; 
@@ -936,13 +1030,24 @@
         checkDeepVeriHealth();
         initSlidingClocks();
         
-        try { const htmlRes = await fetch('/static/lock_ui.html'); const htmlText = await htmlRes.text(); const tempDiv = document.createElement('div'); tempDiv.innerHTML = htmlText; document.body.appendChild(tempDiv.querySelector('#lockPopup')); const script = document.createElement('script'); script.textContent = tempDiv.querySelector('script').textContent; document.body.appendChild(script); setTimeout(() => { if(window.LockSystem) window.LockSystem.init(); }, 100); } catch(e) { }
-        try { const insRes = await fetch('/static/inspector_ui.html'); const insText = await insRes.text(); const insDiv = document.createElement('div'); insDiv.innerHTML = insText; document.body.appendChild(insDiv.querySelector('#inspectorOverlay')); const insScript = document.createElement('script'); insScript.textContent = insDiv.querySelector('script').textContent; document.body.appendChild(insScript); setTimeout(() => { if(window.InspectorSystem) window.InspectorSystem.init(); }, 100); } catch(e) { }
+        try { const htmlRes = await fetch('/static/lock_ui.html?t=' + new Date().getTime()); const htmlText = await htmlRes.text(); const tempDiv = document.createElement('div'); tempDiv.innerHTML = htmlText; document.body.appendChild(tempDiv.querySelector('#lockPopup')); const script = document.createElement('script'); script.textContent = tempDiv.querySelector('script').textContent; document.body.appendChild(script); setTimeout(() => { if(window.LockSystem) window.LockSystem.init(); }, 100); } catch(e) { }
+        try { const insRes = await fetch('/static/inspector_ui.html?t=' + new Date().getTime()); const insText = await insRes.text(); const insDiv = document.createElement('div'); insDiv.innerHTML = insText; document.body.appendChild(insDiv.querySelector('#inspectorOverlay')); const insScript = document.createElement('script'); insScript.textContent = insDiv.querySelector('script').textContent; document.body.appendChild(insScript); setTimeout(() => { if(window.InspectorSystem) window.InspectorSystem.init(); }, 100); } catch(e) { }
         
         try {
             const response = await fetch('/api/config'); const config = await response.json();
-            document.getElementById('baseUrl').value = config.base_url || "https://api.openai.com/v1"; document.getElementById('apiKey').value = config.api_key || ""; document.getElementById('model').value = config.model || "gpt-4o";
+            document.getElementById('baseUrl').value = config.base_url || "https://api.openai.com/v1"; 
+            document.getElementById('apiKey').value = config.api_key || ""; 
+            document.getElementById('model').value = config.model || "gpt-4o";
             if (config.history && config.history.length > 0) { configHistoryData = config.history; renderHistoryDropdown(); }
+            
+            // --- 新增：还原流控配置 ---
+            if (localStorage.getItem('rateLimitEnabled') === 'true') {
+                toggleRateLimitUI(); // 调用一次开启 UI
+            }
+            if (localStorage.getItem('batchSize')) document.getElementById('batchSize').value = localStorage.getItem('batchSize');
+            if (localStorage.getItem('batchDelay')) document.getElementById('batchDelay').value = localStorage.getItem('batchDelay');
+            // ------------------------
+
         } catch (error) { }
     }
 
@@ -993,11 +1098,18 @@
         requestRenderDiff();
     }
 
-    function stopOptimization() { if (abortController) { abortController.abort(); abortController = null; } }
+    function stopOptimization() { if (abortController) { abortController.abort(); abortController = null; } 
+        // 如果紧急停止，同时清除倒计时 ---
+        if (cooldownInterval) { clearInterval(cooldownInterval); cooldownInterval = null; }
+}
 
     async function startOptimization() {
         const btn = document.getElementById('processBtn'); const stopBtn = document.getElementById('stopBtn'); const progressBar = document.getElementById('progressBar');
         const apiKey = document.getElementById('apiKey').value.trim(); const baseUrl = document.getElementById('baseUrl').value.trim(); const model = document.getElementById('model').value.trim(); let text = document.getElementById('sourceText').value.trim(); const promptType = document.querySelector('input[name="promptType"]:checked').value;
+
+        // --- 新增：获取流控参数 ---
+        const batchSize = parseInt(document.getElementById('batchSize').value) || 20;
+        const batchDelay = parseInt(document.getElementById('batchDelay').value) || 60;
 
         if (!text) return showToast("输入源不可为空", "error"); if (!apiKey) { toggleSettings(); return showToast("请键入 API Key", "info"); }
         if(window.LockSystem) text = window.LockSystem.encodeForBackend(text);
@@ -1015,7 +1127,13 @@
         let totalStages = promptType === 'paper_polish_enhance' ? 2 : 1; let currentStage = 1; abortController = new AbortController();
 
         try {
-            const response = await fetch('/api/optimize', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, api_key: apiKey, base_url: baseUrl, model, prompt_type: promptType, is_think: isThinkEnabled }), signal: abortController.signal });
+            const response = await fetch('/api/optimize', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, api_key: apiKey, base_url: baseUrl, model, prompt_type: promptType, is_think: isThinkEnabled, 
+             // --- 新增：将流控参数发给后端 ---
+            batch_limit_enabled: isRateLimitEnabled,
+            batch_size: batchSize,
+            batch_delay: batchDelay   
+            }), 
+            signal: abortController.signal });
             if (!response.ok) throw new Error((await response.json()).detail || '链路失败');
             const reader = response.body.getReader(); const decoder = new TextDecoder("utf-8"); let buffer = "";
 
@@ -1030,6 +1148,27 @@
                         if (data.status === 'stage_start') { globalCleanedText = ""; let stageTitle = data.stage.includes('第一步') ? '【Phase 1: 骨架重构】' : data.stage.includes('第二步') ? '【Phase 2: 血肉拟态】' : `【Action: ${data.stage}】`; if (globalThinkText !== "") { globalThinkText += `\n\n═══════════════════════════\n${stageTitle}\n═══════════════════════════\n\n`; } else { globalThinkText = `${stageTitle}\n\n`; } currentSegmentRaw = ""; currentSegmentThink = ""; document.getElementById('resultText').value = ''; document.getElementById('diffContent').innerHTML = ''; document.getElementById('thinkContent').textContent = globalThinkText; }
                         else if (data.status === 'meta') { if (data.model) setBadgeStatus('active', data.model); if (data.usage) { if (data.usage.total) { estimatedTokens = data.usage.total; updateSlidingClock('tokenFlipContainer', estimatedTokens); } if (data.usage.cached) { cachedTokens = data.usage.cached; updateSlidingClock('cacheFlipContainer', cachedTokens); } } }
                         else if (data.status === 'progress') { btn.innerHTML = `<span class="loader"></span><span class="text-[14px]">${data.message}</span>`; if (data.message.includes('第二步')) currentStage = 2; const match = data.message.match(/(\d+)\/(\d+)/); if (match) { const cur = parseInt(match[1]), tot = parseInt(match[2]); progressBar.style.width = `${((currentStage - 1) / totalStages) * 100 + (cur / tot) * (100 / totalStages)}%`; } } 
+                        // ======================================================
+                        //      接管后端的 cooldown 信号，启动前端倒计时界面
+                        // ======================================================
+                        else if (data.status === 'cooldown') {
+                            let secondsLeft = data.duration;
+                            if (cooldownInterval) clearInterval(cooldownInterval); // 清理旧定时器
+                            
+                            // 初始显示
+                            btn.innerHTML = `<span class="loader" style="border-top-color: #F59E0B;"></span><span class="text-[14px]">触发流控保护，冷却倒计时: <span class="font-mono font-bold text-yellow-300">${secondsLeft}</span> s</span>`;
+                            
+                            // 开启 1 秒执行 1 次的定时器
+                            cooldownInterval = setInterval(() => {
+                                secondsLeft--;
+                                if (secondsLeft > 0) {
+                                    btn.innerHTML = `<span class="loader" style="border-top-color: #F59E0B;"></span><span class="text-[14px]">触发流控保护，冷却倒计时: <span class="font-mono font-bold text-yellow-300">${secondsLeft}</span> s</span>`;
+                                } else {
+                                    clearInterval(cooldownInterval);
+                                    btn.innerHTML = `<span class="loader"></span><span class="text-[14px]">冷却结束，正在唤醒引擎...</span>`;
+                                }
+                            }, 1000);
+                        }
                         else if (data.status === 'segment_start') { currentSegmentRaw = ""; currentSegmentThink = ""; } 
                         else if (data.status === 'typing') { currentSegmentRaw += data.content; estimatedTokens += Math.max(1, Math.floor(data.content.length * 0.7)); updateSlidingClock('tokenFlipContainer', estimatedTokens); updateStreamingUI(); } 
                         else if (data.status === 'thinking') { currentSegmentThink += data.content; estimatedTokens += Math.max(1, Math.floor(data.content.length * 0.7)); updateSlidingClock('tokenFlipContainer', estimatedTokens); updateStreamingUI(); } 

@@ -3,6 +3,7 @@ import json
 import re
 import webbrowser
 import threading
+import asyncio
 from typing import List, Dict, Any, Tuple
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -42,6 +43,10 @@ class OptimizeRequest(BaseModel):
     model: str
     prompt_type: str
     is_think: bool = False
+    # --- 下面是流控参数 ---
+    batch_limit_enabled: bool = False
+    batch_size: int = 20
+    batch_delay: int = 60
 
 class DeleteConfigRequest(BaseModel):
     index: int
@@ -119,6 +124,10 @@ def get_detect_health():
 
 @app.post("/api/detect")
 async def detect_aigc(req: DetectRequest) -> Dict[str, Any]:
+    # ✨ 新增后端强拦截：极速探测，如果离线直接拒绝执行，彻底杜绝逐段超时的死循环
+    if not check_health():
+        return {"status": "error", "message": "DeepVeri检测节点已离线或未响应"}
+
     def process_text_by_paragraphs(text: str) -> Tuple[List[Dict[str, Any]], float]:
         paragraphs = [p for p in text.split('\n') if p.strip()]
         details = []
@@ -302,15 +311,32 @@ async def optimize_text(req: OptimizeRequest):
             results = []
             current_model_sent = False
             
+            api_call_count = 0  
+
             for idx, p in enumerate(stage_segments):
                 yield ("chunk", json.dumps({"status": "progress", "message": f"{stage_name}: 正在处理 {idx+1}/{len(stage_segments)} 段..."}) + "\n")
                 yield ("chunk", json.dumps({"status": "segment_start"}) + "\n")
 
+                # 如果是免检区，直接原样返回。
+                # 由于这里使用了 continue，代码会直接进入下一个循环，不会增加下方的 api_call_count
                 if is_segment_fully_protected(p):
                     yield ("chunk", json.dumps({"status": "typing", "content": p}) + "\n")
                     yield ("chunk", json.dumps({"status": "segment_end", "content": p}) + "\n")
                     results.append(p)
                     continue
+
+                # ======================================================
+                # ✨ 核心 2：流控冷却拦截逻辑移到免检区判断之后，并使用 api_call_count
+                # ======================================================
+                if req.batch_limit_enabled and api_call_count > 0 and api_call_count % req.batch_size == 0:
+                    yield ("chunk", json.dumps({"status": "cooldown", "duration": req.batch_delay}) + "\n")
+                    await asyncio.sleep(req.batch_delay)
+                    # 冷却结束后，重新下发一次 progress，把前端的倒计时文字覆盖掉
+                    yield ("chunk", json.dumps({"status": "progress", "message": f"{stage_name}: 正在处理 {idx+1}/{len(stage_segments)} 段..."}) + "\n")
+                
+                # ✨ 核心 3：只有真正熬过免检区，准备发给大模型处理的段落，计数器才 +1
+                api_call_count += 1
+                # ======================================================
 
                 messages = [{"role": "system", "content": system_prompt + f"\n\n{task_instruction}"}]
                 
