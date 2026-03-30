@@ -284,9 +284,13 @@ window.InspectorSystem = {
 
                     // 延迟 400ms，让用户看爽这个“已锁定”的视觉反馈，再执行真正的底层替换
                     setTimeout(() => {
+                        window.isInspectorLocking = true; // ✨ 开启透视界面的闪光标志
+
                         this.paragraphs[paraIdx] = newP;
-                        this.render(); // 重新渲染透视面板，灰色的免检区出现
+                        this.render(); // 重新渲染，灰色的免检区伴随闪光出现
                         
+                        window.isInspectorLocking = false; // ✨ 渲染完毕立刻关闭标志
+
                         // 隐藏悬浮窗并清除鼠标选中状态
                         this.hidePopup();
                         if (window.getSelection) window.getSelection().removeAllRanges();
@@ -318,7 +322,7 @@ window.InspectorSystem = {
         const container = document.getElementById('inspectorCardList');
         let html = '';
         
-        const lockColor = 'bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-1 rounded-md cursor-pointer hover:bg-red-400 hover:text-white dark:hover:bg-red-500 transition-colors mx-[1px] shadow-sm';
+        const lockColor = `bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-1 rounded-md cursor-pointer hover:bg-red-400 hover:text-white dark:hover:bg-red-500 transition-colors mx-[1px] shadow-sm ${window.isInspectorLocking ? 'lock-flash-animate' : ''}`;
         
         this.paragraphs.forEach((p, idx) => {
             const isEmpty = !p.trim().replace(/\u200B/g, '').replace(/\u200C/g, '');

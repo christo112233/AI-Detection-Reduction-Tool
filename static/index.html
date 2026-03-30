@@ -37,26 +37,40 @@
     <style>
 
         /* ✨ 新增：免检区激活入场动画系统 (主界面 + 透视面板通用引擎) */
-    @keyframes exemptFadeIn {
-        from {
-            /* 激活瞬间：稍微暗淡、微缩 */
-            opacity: 0.3;
-            transform: scale(0.95);
+    /* ✨ 新增：免检区激活「护盾充能」闪光过渡动画 */
+    @keyframes lockFlashAppear {
+        0% {
+            background-color: rgba(255, 255, 255, 1);
+            box-shadow: 0 0 12px rgba(255, 255, 255, 0.9);
+            color: transparent;
         }
-        to {
-            /* 冷却后：完全显现、正常大小 */
-            opacity: 1;
-            transform: scale(1);
+        30% {
+            background-color: rgba(59, 130, 246, 0.4); /* 科技蓝过渡 */
+            box-shadow: 0 0 8px rgba(59, 130, 246, 0.3);
+            color: inherit;
+        }
+        /* 不写 100%，让它自然融合回原生的 bg-gray-300 类属性 */
+    }
+
+    @keyframes lockFlashAppearDark {
+        0% {
+            background-color: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.7);
+            color: transparent;
+        }
+        30% {
+            background-color: rgba(99, 102, 241, 0.5); /* 靛蓝过渡 */
+            box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
+            color: inherit;
         }
     }
 
-    /* 专用的动画挂载类 */
-    .exempt-activate-animation {
-        /* 播放 exemptFadeIn 动画，持续 0.3 秒，平滑，播完停在最后一帧 */
-        animation: exemptFadeIn 0.3s ease-out forwards;
-        /* 为了防止动画启动瞬间闪烁，让元素的初始状态和动画起始帧保持一致 */
-        opacity: 0.3; 
-        transform: scale(0.95);
+    /* 挂载类：移除 forwards 属性，让动画结束后交出控制权 */
+    .lock-flash-animate {
+        animation: lockFlashAppear 0.7s ease-out;
+    }
+    .dark .lock-flash-animate {
+        animation: lockFlashAppearDark 0.7s ease-out;
     }
 
 
@@ -1021,7 +1035,12 @@
         if (!text) { underlay.innerHTML = ''; return; }
         const paragraphs = text.split('\n'); let html = ''; let colorToggle = false;
         const c1 = 'bg-[#FF9F0A]/15 border-b-[2px] border-[#FF9F0A]/30'; const c2 = 'bg-[#0A84FF]/15 border-b-[2px] border-[#0A84FF]/30';
-        const lockColor = 'bg-gray-300/80 dark:bg-[#2C2C2E] text-gray-800 dark:text-transparent rounded-[3px] shadow-[0_0_0_2px_rgba(209,213,219,0.8)] dark:shadow-[0_0_0_2px_rgba(255,255,255,0.15)] relative z-10 mx-[1px]';
+        let lockColorClass = 'bg-gray-300/80 dark:bg-[#2C2C2E] text-gray-800 dark:text-transparent rounded-[3px] shadow-[0_0_0_2px_rgba(209,213,219,0.8)] dark:shadow-[0_0_0_2px_rgba(255,255,255,0.15)] relative z-10 mx-[1px]';
+
+// ✨ 侦测到瞬时锁定标志时，追加动画类
+if (window.isApplyingLock) {
+    lockColorClass += ' lock-flash-animate';
+}
         paragraphs.forEach((para, idx) => {
             const trimmed = para.trim(); if (!trimmed) { html += '\n'; return; }
             const match = para.match(/^(\s*)(.*?)(\s*)$/s);
@@ -1033,13 +1052,13 @@
                 let currentIdx = 0; let styledText = ""; const regex = /\u200B([^\u200C]*)\u200C/g; let m;
                 while ((m = regex.exec(coreText)) !== null) {
                     if (m.index > currentIdx) styledText += escapeHtml(coreText.substring(currentIdx, m.index));
-                    styledText += `<span class="${lockColor}">${escapeHtml(m[1])}</span>`; currentIdx = regex.lastIndex;
+                    styledText += `<span class="${lockColorClass}">${escapeHtml(m[1])}</span>`; currentIdx = regex.lastIndex;
                 }
                 if (currentIdx < coreText.length) styledText += escapeHtml(coreText.substring(currentIdx));
                 paraHtml = `<span class="${colorClass} pb-[2px] rounded-[4px]">${styledText}</span>`;
             } else {
                 let placeholderMap = {}; let pCounter = 0;
-                let textWithPlaceholders = coreText.replace(/\u200B([^\u200C]*)\u200C/g, (m, p1) => { let key = `_K_${pCounter++}_`; placeholderMap[key] = `<span class="${lockColor}">${escapeHtml(p1)}</span>`; return key; });
+                let textWithPlaceholders = coreText.replace(/\u200B([^\u200C]*)\u200C/g, (m, p1) => { let key = `_K_${pCounter++}_`; placeholderMap[key] = `<span class="${lockColorClass}">${escapeHtml(p1)}</span>`; return key; });
                 const sentences = textWithPlaceholders.split(/([。！？；!?;])/);
                 let currentSegment = ""; let currentChunkRaw = "";
                 for (let i = 0; i < sentences.length; i += 2) {

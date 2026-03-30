@@ -83,13 +83,17 @@ applyLock: function() {
         // 加入绿色的微光发光阴影和轻微放大效果
         popupBtn.className = `flex items-center gap-1.5 px-3 py-[6px] bg-gray-800/95 dark:bg-gray-100/95 rounded-[8px] border border-green-500/50 shadow-[0_0_20px_rgba(74,222,128,0.25)] scale-105 transition-all duration-300 backdrop-blur-md`;
 
-        // 2. 延迟 400ms，让用户看清楚“已锁定”的反馈，再执行真正的底层替换
+       // 2. 延迟 400ms，让用户看清楚“已锁定”的反馈，再执行真正的底层替换
         setTimeout(() => {
-            
+            window.isApplyingLock = true; // ✨ 开启护盾闪光标志
+
             textarea.value = newText;
             this.hidePopup();
             
-            if (typeof window.handleInput === 'function') window.handleInput();
+            if (typeof window.handleInput === 'function') window.handleInput(); // 这里同步触发渲染，此时标志为 true
+            
+            window.isApplyingLock = false; // ✨ 渲染完毕立刻关闭标志，确保后续打字绝对不闪！
+
             textarea.setSelectionRange(start + 1, start + 1 + cleanedSelection.length);
 
             // 恢复按钮的原始状态，为用户的下一次划词做好准备
