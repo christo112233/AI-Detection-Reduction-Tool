@@ -113,15 +113,49 @@ window.InspectorSystem = {
     
     togglePara: function(idx) {
         let p = this.paragraphs[idx];
-        if (this.isFullyLocked(p)) {
-            // 解锁：脱去隐身衣
-            this.paragraphs[idx] = p.substring(1, p.length - 1);
-        } else {
-            // 上锁：清理内部所有局部锁，整段穿上隐身衣
-            let clean = p.replace(/\u200B/g, '').replace(/\u200C/g, '');
-            this.paragraphs[idx] = '\u200B' + clean + '\u200C';
+        const isCurrentlyFull = this.isFullyLocked(p);
+        
+        // 1. 获取当前点击的卡片内部的所有关键元素
+        const cards = document.querySelectorAll('.inspector-card');
+        const card = Array.from(cards).find(c => c.getAttribute('data-idx') == idx);
+        
+        if (card) {
+            const textDiv = card.querySelector('.flex-1');
+            const label = card.querySelector('.tracking-wide');
+            const switchBg = card.querySelector('.w-11');
+            const knob = card.querySelector('.w-5');
+            
+            // 2. 强行注入渐变过渡动画，并修改颜色状态
+            if (isCurrentlyFull) {
+                // 解锁动作 -> 变回亮色
+                card.className = "inspector-card flex gap-4 p-5 rounded-2xl border bg-white dark:bg-gray-800/90 border-gray-200/80 dark:border-gray-700/80 shadow-md transition-all duration-300";
+                textDiv.className = "flex-1 text-[15px] leading-[1.8] text-gray-800 dark:text-gray-200 selection:bg-indigo-200 dark:selection:bg-indigo-900 transition-colors duration-300";
+                label.className = "text-[11px] font-bold text-blue-500 tracking-wide transition-colors duration-300";
+                label.innerText = "执行重塑";
+                switchBg.className = "w-11 h-6 rounded-full relative cursor-pointer transition-colors duration-300 bg-blue-500 shadow-[0_2px_8px_rgba(59,130,246,0.4)]";
+                knob.className = "w-5 h-5 bg-white rounded-full absolute top-[2px] transition-transform duration-300 shadow-sm translate-x-[22px]";
+                
+                // 修改底层数据
+                this.paragraphs[idx] = p.substring(1, p.length - 1);
+            } else {
+                // 上锁动作 -> 变灰暗淡
+                card.className = "inspector-card flex gap-4 p-5 rounded-2xl border bg-gray-100/50 dark:bg-gray-800/30 border-gray-200 dark:border-gray-700 opacity-60 grayscale-[50%] transition-all duration-300";
+                textDiv.className = "flex-1 text-[15px] leading-[1.8] text-gray-400 dark:text-gray-500 selection:bg-indigo-200 dark:selection:bg-indigo-900 transition-colors duration-300";
+                label.className = "text-[11px] font-bold text-gray-400 tracking-wide transition-colors duration-300";
+                label.innerText = "原样保留";
+                switchBg.className = "w-11 h-6 rounded-full relative cursor-pointer transition-colors duration-300 bg-gray-300 dark:bg-gray-600";
+                knob.className = "w-5 h-5 bg-white rounded-full absolute top-[2px] transition-transform duration-300 shadow-sm left-[2px]";
+                
+                // 修改底层数据
+                let clean = p.replace(/\u200B/g, '').replace(/\u200C/g, '');
+                this.paragraphs[idx] = '\u200B' + clean + '\u200C';
+            }
         }
-        this.render();
+        
+        // 3. 延迟 300 毫秒（等 CSS 渐变动画舒服地播完），再全局重绘，保证 HTML 结构彻底同步！
+        setTimeout(() => {
+            this.render();
+        }, 300);
     },
     
     removeWordLock: function(idx, lockText) {
@@ -239,14 +273,42 @@ window.InspectorSystem = {
                     }
                     if (currentlyLocked) newP += '\u200C';
                     
-                    this.paragraphs[paraIdx] = newP;
-                    this.render();
+                    // ✨ 动效改造开始：拦截瞬间替换，注入主界面的绿光确认动画
+                    const popupBtn = document.querySelector('#inspectorLockPopup button');
+                    const originalHtml = popupBtn.innerHTML;
+                    const originalClass = popupBtn.className;
+
+                    // 变成绿色打勾状态，带点轻微的放大和发光
+                    popupBtn.innerHTML = `<svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> <span class="text-green-400 font-bold tracking-wider">已成功锁定</span>`;
+                    popupBtn.className = `flex items-center gap-1.5 px-3 py-[6px] bg-gray-800/95 dark:bg-gray-100/95 rounded-[8px] border border-green-500/50 shadow-[0_0_20px_rgba(74,222,128,0.25)] scale-105 transition-all duration-300 backdrop-blur-md`;
+
+                    // 延迟 400ms，让用户看爽这个“已锁定”的视觉反馈，再执行真正的底层替换
+                    setTimeout(() => {
+                        this.paragraphs[paraIdx] = newP;
+                        this.render(); // 重新渲染透视面板，灰色的免检区出现
+                        
+                        // 隐藏悬浮窗并清除鼠标选中状态
+                        this.hidePopup();
+                        if (window.getSelection) window.getSelection().removeAllRanges();
+                        
+                        // 等悬浮窗彻底变透明隐藏后，偷偷把按钮恢复原样，等待下次划词
+                        setTimeout(() => {
+                            popupBtn.innerHTML = originalHtml;
+                            popupBtn.className = originalClass;
+                        }, 200);
+                    }, 400);
+                    
+                    // 核心：拦截成功，带动画退出
+                    return; 
                 }
             }
+            
+            // 如果没选中有效内容，直接执行清理
+            this.hidePopup();
+            if (window.getSelection) window.getSelection().removeAllRanges();
+            
         } catch (err) {
             console.error("执行锁定失败:", err);
-        } finally {
-            // ✨ 放在 finally 中，哪怕上面有任何报错，也能保证强制隐藏悬浮窗，不影响后续系统流转！
             this.hidePopup();
             if (window.getSelection) window.getSelection().removeAllRanges();
         }

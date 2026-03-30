@@ -35,6 +35,61 @@
     </script>
 
     <style>
+
+        /* ✨ 新增：免检区激活入场动画系统 (主界面 + 透视面板通用引擎) */
+    @keyframes exemptFadeIn {
+        from {
+            /* 激活瞬间：稍微暗淡、微缩 */
+            opacity: 0.3;
+            transform: scale(0.95);
+        }
+        to {
+            /* 冷却后：完全显现、正常大小 */
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+
+    /* 专用的动画挂载类 */
+    .exempt-activate-animation {
+        /* 播放 exemptFadeIn 动画，持续 0.3 秒，平滑，播完停在最后一帧 */
+        animation: exemptFadeIn 0.3s ease-out forwards;
+        /* 为了防止动画启动瞬间闪烁，让元素的初始状态和动画起始帧保持一致 */
+        opacity: 0.3; 
+        transform: scale(0.95);
+    }
+
+
+    /* 🚨 终极无 Bug 版：打字机沉浸感能量环 */
+    
+    /* 核心 1：呼吸引擎 (绝对不能加 !important) */
+    @keyframes streamingGlowBreathe {
+        0% {
+            /* 呼气：光晕收缩，颜色变暗 */
+            border-color: rgba(59, 130, 246, 0.3);
+            box-shadow: 0 0 8px rgba(59, 130, 246, 0.15), inset 0 0 8px rgba(59, 130, 246, 0.05);
+        }
+        100% {
+            /* 吸气：光晕全开，高亮拉满 */
+            border-color: rgba(59, 130, 246, 1);
+            box-shadow: 0 0 25px rgba(59, 130, 246, 0.8), inset 0 0 25px rgba(59, 130, 246, 0.3);
+        }
+    }
+
+    /* 核心 2：基础容器加上平滑过渡，保证淡出时丝滑 */
+    #resultText, #thinkContent {
+        transition: box-shadow 0.5s ease, border-color 0.5s ease !important;
+        outline: none !important; 
+    }
+
+    /* 核心 3：激活状态 (只要加上这个类，立刻开始呼吸) */
+    .streaming-glow-active {
+        border-width: 2px !important;
+        border-style: solid !important;
+        /* 1.5秒一次呼吸，无限循环，交替反向播放 */
+        animation: streamingGlowBreathe 1.5s ease-in-out infinite alternate !important;
+    }
+
         /* ================= 基础视觉系统 ================= */
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -141,6 +196,8 @@
         
         .fade-slide-enter { opacity: 0; transform: translateX(10px); pointer-events: none; }
         .fade-slide-active { opacity: 1; transform: translateX(0); pointer-events: auto; transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); }
+
+        
 
 
         /* ================= 呼吸光效 ================= */
@@ -401,6 +458,9 @@
                     <button onclick="window.InspectorSystem && window.InspectorSystem.open()" class="ml-2 px-3 py-1 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-500/10 dark:to-purple-500/10 border border-indigo-200/60 dark:border-indigo-500/30 text-indigo-600 dark:text-indigo-400 rounded-full text-[12px] font-semibold flex items-center gap-1.5 active:scale-95 transition-all">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg> 选段透视
                     </button>
+                    <button onclick="relayOptimization()" class="ml-2 px-3 py-1 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-500/10 dark:to-cyan-500/10 border border-blue-200/60 dark:border-blue-500/30 text-blue-600 dark:text-blue-400 rounded-full text-[12px] font-semibold flex items-center gap-1.5 active:scale-95 transition-all" title="将右侧结果覆盖至左侧，并根据检测报告智能冻结 AI率 ≤35% 的安全段落">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path></svg> 智能接力
+                    </button>
                 </div>
                 <div class="flex items-center gap-4">
                     <span id="charCount" class="text-[12px] font-semibold text-gray-400 bg-white/80 dark:bg-black/30 px-2.5 py-0.5 rounded-full shadow-sm">0 字</span>
@@ -413,6 +473,7 @@
             <div class="flex-1 relative bg-transparent">
                 <div id="splitUnderlay" class="absolute inset-0 p-6 whitespace-pre-wrap break-words text-[15px] leading-[1.9] text-transparent z-0 overflow-y-auto pointer-events-none transition-opacity duration-300" style="font-family: inherit;"></div>
                 <textarea id="sourceText" placeholder="在此粘贴需要重构底层的原始文本..." class="absolute inset-0 w-full h-full p-6 bg-transparent outline-none leading-[1.9] text-[15px] z-10 resize-none text-gray-800 dark:text-gray-200" style="font-family: inherit;" oninput="handleInput()" onscroll="syncScroll()"></textarea>
+                <div id="aiContentLeft" class="absolute inset-0 p-6 overflow-y-auto text-[15px] leading-[1.9] z-30 transition-opacity duration-500 opacity-0 pointer-events-none rounded-b-[24px] bg-white/95 dark:bg-[#111]/95 backdrop-blur-md"></div>
             </div>
         </div>
 
@@ -437,6 +498,13 @@
                         <span class="text-[12px] text-[#0071e3]/80 dark:text-[#4facfe]/80 font-medium select-none">差异高亮</span>
                         <div id="diffSwitch" class="w-[36px] h-[20px] bg-gray-300 dark:bg-gray-600 rounded-full relative toggle-switch">
                             <div id="diffKnob" class="w-[16px] h-[16px] bg-white rounded-full absolute top-[2px] left-[2px] shadow-sm toggle-knob" style="transform: translateX(2px);"></div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2 cursor-pointer ml-1" onclick="toggleAiViewMode()">
+                        <span class="text-[12px] text-purple-600/80 dark:text-purple-400/80 font-bold select-none">AI透视</span>
+                        <div id="aiViewSwitch" class="w-[36px] h-[20px] bg-gray-300 dark:bg-gray-600 rounded-full relative toggle-switch">
+                            <div id="aiViewKnob" class="w-[16px] h-[16px] bg-white rounded-full absolute top-[2px] left-[2px] shadow-sm toggle-knob" style="transform: translateX(2px);"></div>
                         </div>
                     </div>
 
@@ -469,6 +537,7 @@
             <div class="flex-1 relative">
                 <textarea id="resultText" readonly placeholder="系统处理结果流式输出..." class="w-full h-full p-6 bg-transparent outline-none leading-[1.9] text-[15px] resize-none text-gray-800 dark:text-gray-200 absolute inset-0 z-10 transition-opacity duration-500 opacity-100 pointer-events-auto"></textarea>
                 <div id="diffContent" class="absolute inset-0 p-6 overflow-y-auto diff-container text-[15px] leading-[1.9] z-20 transition-opacity duration-500 opacity-0 pointer-events-none rounded-b-[24px]"></div>
+                <div id="aiContentRight" class="absolute inset-0 p-6 overflow-y-auto text-[15px] leading-[1.9] z-30 transition-opacity duration-500 opacity-0 pointer-events-none rounded-b-[24px] bg-white/95 dark:bg-[#111]/95 backdrop-blur-md"></div>
             </div>
         </div>
     </div>
@@ -480,6 +549,7 @@
     let isSplitEnabled = true;
     let isThinkEnabled = false;
     let isDiffEnabled = false;
+    let isAiViewEnabled = false; // ✨ 新增：AI透视模式状态
     let abortController = null;
     let cooldownInterval = null; //用于存放倒计时的定时器
     let dmp = new diff_match_patch();
@@ -566,6 +636,74 @@
     }
 
     let toastTimeout;
+
+    // ✨ 新增：全局流体按钮形变引擎
+    function updateBtnWithAnimation(btn, newHtml) {
+        if (!btn) return;
+        
+        // 确保按钮自身具备过渡属性
+        if (!btn.classList.contains('transition-all')) {
+            btn.classList.add('transition-all', 'duration-300', 'ease-in-out');
+        }
+
+        // 1. 文字和图标先淡出，并伴随极其轻微的向内收缩
+        btn.style.opacity = '0.4';
+        btn.style.transform = 'scale(0.97)';
+        
+        setTimeout(() => {
+            // 2. 在最暗的瞬间，偷换里面的内容
+            btn.innerHTML = newHtml;
+            
+            // 3. 带着新内容重新点亮，并弹回原本的大小
+            btn.style.opacity = '1';
+            btn.style.transform = 'scale(1)';
+        }, 150); // 150ms 的极速淡出，非常符合人类视觉残留感
+    }
+
+    // ✨ 新增：前端智能拓扑预测引擎（提前算出后端的切片行为）
+    function buildSegmentContinuationMap(rawText) {
+        let isContinuationMap = [];
+        const paragraphs = rawText.split('\n');
+        
+        paragraphs.forEach(para => {
+            const trimmed = para.trim();
+            if (!trimmed) return; 
+            
+            // 借用你在前端可视化里的 500 字切片逻辑，精准算出每一段会被切成几个 Segment
+            if (typeof countTextLength === 'function' && countTextLength(trimmed) > 500) {
+                let pCounter = 0;
+                let textWithPlaceholders = trimmed.replace(/\u200B([^\u200C]*)\u200C/g, () => `_K_${pCounter++}_`);
+                const sentences = textWithPlaceholders.split(/([。！？；!?;])/);
+                let currentSegment = "";
+                let isFirst = true;
+                
+                for (let i = 0; i < sentences.length; i += 2) {
+                    let sentence = sentences[i]; 
+                    if (i + 1 < sentences.length) sentence += sentences[i + 1];
+                    
+                    if (countTextLength(currentSegment + sentence) <= 500) { 
+                        currentSegment += sentence; 
+                    } else { 
+                        if (currentSegment) { 
+                            // 第一块是 false (代表新段落的开头)，后面的块全是 true (代表是同一段的延续)
+                            isContinuationMap.push(!isFirst); 
+                            isFirst = false; 
+                        } 
+                        currentSegment = sentence; 
+                    }
+                }
+                if (currentSegment) { 
+                    isContinuationMap.push(!isFirst); 
+                }
+            } else {
+                // 不足 500 字，绝对是一块完整的 Segment，必然是新段落
+                isContinuationMap.push(false);
+            }
+        });
+        
+        return isContinuationMap;
+    }
+
     function showToast(msg, type = 'success') {
         const toast = document.getElementById('toast');
         document.getElementById('toastMsg').innerText = msg;
@@ -740,6 +878,12 @@
         knob.style.transform = isDiffEnabled ? 'translateX(16px)' : 'translateX(2px)';
         
         if (isDiffEnabled) { 
+
+            
+            // ✨ 新增防冲突：如果 AI 透视开着，自动关掉
+            if (isAiViewEnabled) toggleAiViewMode();
+            
+            switchBg.className = 'w-[36px] h-[20px] bg-[#34C759] rounded-full relative toggle-switch';
             switchBg.className = 'w-[36px] h-[20px] bg-[#34C759] rounded-full relative toggle-switch';
             d.classList.replace('opacity-0', 'opacity-100'); d.classList.replace('pointer-events-none', 'pointer-events-auto');
             r.classList.replace('opacity-100', 'opacity-0'); r.classList.replace('pointer-events-auto', 'pointer-events-none');
@@ -749,6 +893,97 @@
             d.classList.replace('opacity-100', 'opacity-0'); d.classList.replace('pointer-events-auto', 'pointer-events-none');
             r.classList.replace('opacity-0', 'opacity-100'); r.classList.replace('pointer-events-none', 'pointer-events-auto');
         }
+    }
+    // ✨ 新增：AI 透视模式切换控制
+    function toggleAiViewMode() {
+        if (!lastDetectReportData) {
+            showToast('请先执行 AI 率检测！', 'info');
+            return;
+        }
+        
+        isAiViewEnabled = !isAiViewEnabled;
+        const knob = document.getElementById('aiViewKnob');
+        const switchBg = knob.parentElement;
+        
+        const aiLeft = document.getElementById('aiContentLeft');
+        const aiRight = document.getElementById('aiContentRight');
+        const srcText = document.getElementById('sourceText');
+        const resText = document.getElementById('resultText');
+        
+        knob.style.transform = isAiViewEnabled ? 'translateX(16px)' : 'translateX(2px)';
+        
+        if (isAiViewEnabled) {
+            // 防冲突：如果差异对比开着，自动关掉
+            if (isDiffEnabled) toggleDiffMode();
+            
+            switchBg.className = 'w-[36px] h-[20px] bg-purple-500 rounded-full relative toggle-switch';
+            
+            // 展现毛玻璃涂层
+            aiLeft.classList.replace('opacity-0', 'opacity-100'); aiLeft.classList.replace('pointer-events-none', 'pointer-events-auto');
+            aiRight.classList.replace('opacity-0', 'opacity-100'); aiRight.classList.replace('pointer-events-none', 'pointer-events-auto');
+            
+            // 隐藏底层文本框
+            srcText.classList.add('opacity-0', 'pointer-events-none');
+            resText.classList.replace('opacity-100', 'opacity-0'); resText.classList.replace('pointer-events-auto', 'pointer-events-none');
+            
+            renderAiView(); // 触发渲染
+        } else {
+            switchBg.className = 'w-[36px] h-[20px] bg-gray-300 dark:bg-gray-600 rounded-full relative toggle-switch';
+            
+            // 褪去毛玻璃涂层
+            aiLeft.classList.replace('opacity-100', 'opacity-0'); aiLeft.classList.replace('pointer-events-auto', 'pointer-events-none');
+            aiRight.classList.replace('opacity-100', 'opacity-0'); aiRight.classList.replace('pointer-events-auto', 'pointer-events-none');
+            
+            // 恢复底层文本框
+            srcText.classList.remove('opacity-0', 'pointer-events-none');
+            resText.classList.replace('opacity-0', 'opacity-100'); resText.classList.replace('pointer-events-none', 'pointer-events-auto');
+        }
+    }
+
+    // ✨ 新增：AI 数据可视化渲染引擎
+    function renderAiView() {
+        if (!lastDetectReportData) return;
+        
+        const renderDetails = (details, containerId) => {
+            const container = document.getElementById(containerId);
+            let html = '';
+            
+            details.forEach((item) => {
+                if (item.ignored && !item.text.trim()) return; // 忽略全空行
+                
+                let bgColor = 'bg-gray-100/50 dark:bg-gray-800/30';
+                let textColor = 'text-gray-500 dark:text-gray-500';
+                let badgeClass = 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400';
+                let badgeText = '短句免检';
+                
+                if (!item.ignored) {
+                    textColor = 'text-gray-800 dark:text-gray-200';
+                    if (item.ai_ratio < 0.3) {
+                        bgColor = 'bg-green-500/10 dark:bg-green-500/10 hover:bg-green-500/20';
+                        badgeClass = 'bg-green-500 text-white shadow-sm';
+                    } else if (item.ai_ratio < 0.7) {
+                        bgColor = 'bg-yellow-500/10 dark:bg-yellow-500/10 hover:bg-yellow-500/20';
+                        badgeClass = 'bg-yellow-500 text-white shadow-sm';
+                    } else {
+                        bgColor = 'bg-red-500/10 dark:bg-red-500/10 hover:bg-red-500/20';
+                        badgeClass = 'bg-red-500 text-white shadow-sm';
+                    }
+                    badgeText = `AI: ${(item.ai_ratio * 100).toFixed(1)}%`;
+                }
+                
+                html += `
+                <div class="mb-4 p-4 rounded-[18px] transition-all duration-300 border border-black/5 dark:border-white/5 ${bgColor}">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-[11px] font-bold px-2 py-0.5 rounded font-mono tracking-wider ${badgeClass}">${badgeText}</span>
+                    </div>
+                    <p class="${textColor} text-[14.5px] leading-[1.9] font-serif">${escapeHtml(item.text)}</p>
+                </div>`;
+            });
+            container.innerHTML = html || '<div class="text-center text-gray-400 mt-10">无有效段落数据</div>';
+        };
+        
+        renderDetails(lastDetectReportData.source.details, 'aiContentLeft');
+        renderDetails(lastDetectReportData.result.details, 'aiContentRight');
     }
 
     function renderDiff() {
@@ -786,8 +1021,7 @@
         if (!text) { underlay.innerHTML = ''; return; }
         const paragraphs = text.split('\n'); let html = ''; let colorToggle = false;
         const c1 = 'bg-[#FF9F0A]/15 border-b-[2px] border-[#FF9F0A]/30'; const c2 = 'bg-[#0A84FF]/15 border-b-[2px] border-[#0A84FF]/30';
-        const lockColor = 'bg-gray-300/80 text-gray-800 rounded-[3px] shadow-[0_0_0_2px_rgba(209,213,219,0.8)] relative z-10 mx-[1px]';
-
+        const lockColor = 'bg-gray-300/80 dark:bg-[#2C2C2E] text-gray-800 dark:text-transparent rounded-[3px] shadow-[0_0_0_2px_rgba(209,213,219,0.8)] dark:shadow-[0_0_0_2px_rgba(255,255,255,0.15)] relative z-10 mx-[1px]';
         paragraphs.forEach((para, idx) => {
             const trimmed = para.trim(); if (!trimmed) { html += '\n'; return; }
             const match = para.match(/^(\s*)(.*?)(\s*)$/s);
@@ -849,7 +1083,21 @@
     }
 
     function clearText() {
-        document.getElementById('sourceText').value = ''; document.getElementById('resultText').value = ''; document.getElementById('diffContent').innerHTML = ''; document.getElementById('thinkContent').textContent = '等待调度...'; document.getElementById('charCount').innerText = '0 字'; document.getElementById('outCharCount').innerText = '0 字';
+        // ✨ 新增：清空工作台时，重置各种覆盖层视图
+        if (isAiViewEnabled) toggleAiViewMode();
+        if (isDiffEnabled) toggleDiffMode();
+        document.getElementById('aiContentLeft').innerHTML = '';
+        document.getElementById('aiContentRight').innerHTML = '';
+        document.getElementById('sourceText').value = ''; 
+        document.getElementById('resultText').value = ''; 
+        document.getElementById('diffContent').innerHTML = ''; 
+        
+        // 🚨 修正：清空工作台时，应该是【熄灭】光晕，而不是点亮它！
+        const elsToGlow = [document.getElementById('resultText'), document.getElementById('thinkContent')];
+        elsToGlow.forEach(el => {
+            if (el) el.classList.remove('streaming-glow-active');
+        });
+
         if(window.LockSystem) window.LockSystem.lockMap = {};
         setBadgeStatus('wait', '等待调度...'); initSlidingClocks();
         globalCleanedText = ""; globalThinkText = ""; currentSegmentRaw = ""; currentSegmentThink = "";
@@ -865,6 +1113,132 @@
         if (!text) return showToast('无内容', 'error');
         const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
         showToast('拷贝成功', 'success');
+    }
+    // ✨ 新增：文本飞越动效引擎 (Apple 风格平滑过渡)
+    function playFlyAnimation(fromEl, toEl) {
+        const fromRect = fromEl.getBoundingClientRect();
+        const toRect = toEl.getBoundingClientRect();
+
+        // 1. 创建一个视觉替身（幽灵元素）
+        const ghost = document.createElement('div');
+        ghost.innerText = fromEl.value;
+        ghost.className = fromEl.className; // 继承原文本框的 Tailwind 字体和内边距样式
+        
+        // 2. 赋予浮空与毛玻璃样式
+        const isDark = document.documentElement.classList.contains('dark');
+        ghost.style.cssText = `
+            position: fixed;
+            left: ${fromRect.left}px;
+            top: ${fromRect.top}px;
+            width: ${fromRect.width}px;
+            height: ${fromRect.height}px;
+            margin: 0;
+            z-index: 9999;
+            opacity: 0.95;
+            pointer-events: none;
+            transition: all 0.6s cubic-bezier(0.25, 1, 0.3, 1);
+            overflow: hidden;
+            white-space: pre-wrap;
+            background: ${isDark ? 'rgba(28, 28, 30, 0.9)' : 'rgba(255, 255, 255, 0.9)'};
+            backdrop-filter: blur(12px);
+            border-radius: 16px;
+            box-shadow: 0 10px 40px ${isDark ? 'rgba(0,0,0,0.5)' : 'rgba(0,113,227,0.15)'};
+        `;
+        document.body.appendChild(ghost);
+
+        // 3. 强行触发一次浏览器重绘
+        ghost.offsetHeight;
+
+        // 4. 设定目标终点，触发 CSS 飞行过渡
+        ghost.style.left = `${toRect.left}px`;
+        ghost.style.top = `${toRect.top}px`;
+        ghost.style.opacity = '0';
+        ghost.style.transform = 'scale(0.98)';
+
+        // 5. 动画结束后销毁幽灵
+        setTimeout(() => {
+            if (ghost.parentNode) ghost.parentNode.removeChild(ghost);
+        }, 600);
+    }
+
+    // ✨ 新增：带状态继承的智能回炉机制
+    function relayOptimization() {
+        const srcEl = document.getElementById('sourceText');
+        const resEl = document.getElementById('resultText');
+        const resultText = resEl.value;
+
+        if (!resultText.trim()) {
+            return showToast('右侧无输出内容，无法接力', 'error');
+        }
+        if (!lastDetectReportData) {
+            return showToast('请先执行一次【检测AI率】，系统需要依据报告进行智能冻结', 'info');
+        }
+
+        // 🚀 触发视觉动效
+        playFlyAnimation(resEl, srcEl);
+
+        // 🛡️ 核心修复 1：全局剔除 Windows 带来的 \r 顽固换行符，防止破坏 \u200C 锁的判定
+        const resParas = resultText.replace(/\r/g, '').split('\n');
+        
+        let availableDetails = [...lastDetectReportData.result.details];
+        let newParas = [];
+        let lockedCount = 0;
+        
+        for (let i = 0; i < resParas.length; i++) {
+            let res_p = resParas[i];
+            
+            // 🛡️ 核心修复 2：使用 trim() 剥离两端可能的不可见空格
+            let trimmed_p = res_p.trim();
+            
+            // 精准判定是否带有首尾锁
+            let isFullyLocked = trimmed_p.startsWith('\u200B') && trimmed_p.endsWith('\u200C') && !trimmed_p.substring(1, trimmed_p.length - 1).includes('\u200B');
+            let clean_res_p = res_p.replace(/[\u200B\u200C]/g, '');
+            
+            if (isFullyLocked) {
+                // 1. 强制状态继承：原汁原味地保留上一轮的锁
+                newParas.push(res_p);
+            } else if (clean_res_p.trim() === '') {
+                // 2. 空行保留
+                newParas.push(res_p);
+            } else {
+                // 3. 智能查找
+                let detailIdx = availableDetails.findIndex(d => d.text.trim() === clean_res_p.trim());
+                let detail = detailIdx !== -1 ? availableDetails.splice(detailIdx, 1)[0] : null;
+
+                // 🛡️ 核心修复 3：不仅接纳 ai_ratio <= 0.35，对于被检测器判定为短句免检 (ignored) 的段落，也一并视为安全，穿上隐身衣
+                if (detail && (detail.ignored || detail.ai_ratio <= 0.35)) {
+                    newParas.push('\u200B' + clean_res_p + '\u200C');
+                    lockedCount++;
+                } else {
+                    // 依然超标的顽固段落，原样放回左侧，准备接受下一次 AI 毒打
+                    newParas.push(res_p);
+                }
+            }
+        }
+        
+        // 稍微延迟赋值，配合视觉掩护
+        setTimeout(() => {
+            srcEl.value = newParas.join('\n');
+            
+            // 清理右侧并重置各种输出状态，准备下一轮
+            resEl.value = '';
+            document.getElementById('diffContent').innerHTML = '';
+            document.getElementById('thinkContent').textContent = '等待调度...';
+            document.getElementById('outCharCount').innerText = '0 字';
+            globalCleanedText = ""; globalThinkText = ""; currentSegmentRaw = ""; currentSegmentThink = "";
+            
+            // 重置顶部状态
+            let modelText = document.getElementById('detectedModelText').innerText.replace(' (就绪)', '');
+            setBadgeStatus('wait', modelText + ' (就绪)');
+            document.getElementById('topAiBadge').classList.add('hidden');
+            lastDetectReportData = null; 
+            
+            if (typeof isAiViewEnabled !== 'undefined' && isAiViewEnabled) toggleAiViewMode();
+            if (typeof isDiffEnabled !== 'undefined' && isDiffEnabled) toggleDiffMode();
+            if (typeof handleInput === 'function') handleInput();
+            
+            showToast(`接力成功！已智能冻结 ${lockedCount} 个安全段落`, 'success');
+        }, 50);
     }
 
     // --- AIGC 段落级分析报告核心逻辑 ---
@@ -918,7 +1292,7 @@
         }
 
         btn.disabled = true;
-        btn.innerHTML = `<span class="loader !w-3 !h-3 !mr-1"></span>分析中...`;
+        updateBtnWithAnimation(btn, `<span class="loader !w-3 !h-3 !mr-1"></span>分析中...`);
         
         try {
             const response = await fetch('/api/detect', {
@@ -936,6 +1310,9 @@
             
             if (data.status === 'success') {
                 lastDetectReportData = data; 
+
+                // 如果当前处于 AI 透视模式，拿到新数据后直接原位刷新视图
+                if (isAiViewEnabled) renderAiView();
                 
                 const srcAvgStr = (data.source.average * 100).toFixed(1);
                 const resAvgStr = (data.result.average * 100).toFixed(1);
@@ -1078,9 +1455,34 @@
     }
 
     function restoreUI() {
-        const btn = document.getElementById('processBtn'); const stopBtn = document.getElementById('stopBtn');
-        stopBtn.classList.replace('fade-slide-active', 'fade-slide-enter'); setTimeout(() => stopBtn.classList.add('hidden'), 300);
-        btn.disabled = false; btn.innerHTML = `<span>开始执行重塑</span>`; btn.classList.remove('opacity-70', 'cursor-not-allowed');
+        // ✨ 1. 沉浸感能量环：优雅地双重褪去 (停止呼吸 + 淡出)
+        const resText = document.getElementById('resultText');
+        const thinkText = document.getElementById('thinkContent');
+        
+        [resText, thinkText].forEach(el => {
+            if (el) {
+                // 同时移除 active(呼吸) 和 fading(发光基础)，触发 CSS 的 0.5s 平滑淡出
+                el.classList.remove('streaming-glow-active', 'streaming-glow-fading');
+            }
+        });
+
+        const btn = document.getElementById('processBtn'); 
+        const stopBtn = document.getElementById('stopBtn');
+        
+        // 2. 隐藏停止按钮
+        stopBtn.classList.replace('fade-slide-active', 'fade-slide-enter'); 
+        setTimeout(() => stopBtn.classList.add('hidden'), 300);
+        
+        // 3. 恢复主操作按钮
+        btn.disabled = false; 
+        btn.classList.remove('opacity-70', 'cursor-not-allowed');
+        
+        // ✨ 4. 顺手帮你补上之前漏掉的按钮流体恢复动画！
+        if (typeof updateBtnWithAnimation === 'function') {
+            updateBtnWithAnimation(btn, `<span>开始执行重塑</span>`);
+        } else {
+            btn.innerHTML = `<span>开始执行重塑</span>`; 
+        }
     }
 
     function updateStreamingUI() {
@@ -1093,8 +1495,29 @@
         
         if(window.LockSystem) displayClean = window.LockSystem.decodeFromBackend(displayClean);
         
-        const resText = document.getElementById('resultText'); resText.value = displayClean; resText.scrollTop = resText.scrollHeight; document.getElementById('outCharCount').innerText = displayClean.length + ' 字';
-        if(isThinkEnabled) { const tContent = document.getElementById('thinkContent'); tContent.textContent = displayThink || (globalThinkText ? globalThinkText : "引擎无思考链。"); tContent.scrollTop = tContent.scrollHeight; }
+        const resText = document.getElementById('resultText'); 
+        const isActivelyStreaming = tempClean.length > 0 || tempThink.length > 0;
+        
+        // 挂载打字机极客游标
+        resText.value = isActivelyStreaming ? displayClean + ' ▍' : displayClean; 
+        resText.scrollTop = resText.scrollHeight; 
+        document.getElementById('outCharCount').innerText = displayClean.length + ' 字';
+        
+        if(isThinkEnabled) { 
+            const tContent = document.getElementById('thinkContent'); 
+            tContent.textContent = isActivelyStreaming ? displayThink + ' ▍' : (displayThink || (globalThinkText ? globalThinkText : "引擎无思考链。")); 
+            tContent.scrollTop = tContent.scrollHeight; 
+        }
+        
+        // ✨ 删除了光晕类名的控制，因为已经交给了 startOptimization 全局接管！
+        
+        // 保留 400ms 定时器，仅仅用于在网络停顿时“抹除游标”，保证文本纯净
+        if (window.cursorTimeout) clearTimeout(window.cursorTimeout);
+        window.cursorTimeout = setTimeout(() => {
+            resText.value = displayClean; 
+            if(isThinkEnabled) document.getElementById('thinkContent').textContent = displayThink || (globalThinkText ? globalThinkText : "引擎无思考链。");
+        }, 400);
+
         requestRenderDiff();
     }
 
@@ -1113,11 +1536,28 @@
 
         if (!text) return showToast("输入源不可为空", "error"); if (!apiKey) { toggleSettings(); return showToast("请键入 API Key", "info"); }
         if(window.LockSystem) text = window.LockSystem.encodeForBackend(text);
+        // ✨ 新增：获取段落切片拓扑地图
+        let segmentContinuationMap = buildSegmentContinuationMap(text);
+        let segmentGlobalIndex = 0;
 
-        btn.disabled = true; btn.innerHTML = `<span class="loader"></span>建立链路中...`; btn.classList.add('opacity-70', 'cursor-not-allowed');
+        // ✨ 替换第 1 处：刚点击按钮，建立链路时
+        btn.disabled = true; 
+        updateBtnWithAnimation(btn, `<span class="loader"></span>建立链路中...`); 
+        btn.classList.add('opacity-70', 'cursor-not-allowed');
+        
         stopBtn.classList.remove('hidden'); requestAnimationFrame(() => stopBtn.classList.replace('fade-slide-enter', 'fade-slide-active'));
         
-        document.getElementById('resultText').value = ''; document.getElementById('diffContent').innerHTML = ''; 
+        document.getElementById('resultText').value = '';
+        document.getElementById('diffContent').innerHTML = ''; 
+        // ✨ 极简版：一键开启呼吸光晕 (完全依靠 CSS 自己实现平滑淡入)
+        const elsToGlow = [document.getElementById('resultText')];
+        if (typeof isThinkEnabled !== 'undefined' && isThinkEnabled) {
+            const thinkEl = document.getElementById('thinkContent');
+            if (thinkEl) elsToGlow.push(thinkEl);
+        }
+        elsToGlow.forEach(el => el.classList.add('streaming-glow-active')); 
+
+        // ====== 下面保留你原本的核心逻辑 ======
         globalCleanedText = ""; globalThinkText = ""; currentSegmentRaw = ""; currentSegmentThink = "";
         
         document.getElementById('topAiBadge').classList.add('hidden'); lastDetectReportData = null;
@@ -1127,7 +1567,17 @@
         let totalStages = promptType === 'paper_polish_enhance' ? 2 : 1; let currentStage = 1; abortController = new AbortController();
 
         try {
-            const response = await fetch('/api/optimize', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, api_key: apiKey, base_url: baseUrl, model, prompt_type: promptType, is_think: isThinkEnabled, 
+            const response = await fetch('/api/optimize', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ 
+                    text, 
+                    api_key: apiKey, 
+                    base_url: baseUrl, 
+                    model, 
+                    prompt_type: promptType, 
+                    is_think: isThinkEnabled,
+
              // --- 新增：将流控参数发给后端 ---
             batch_limit_enabled: isRateLimitEnabled,
             batch_size: batchSize,
@@ -1145,34 +1595,56 @@
                     if (!line.trim()) continue;
                     try {
                         const data = JSON.parse(line);
-                        if (data.status === 'stage_start') { globalCleanedText = ""; let stageTitle = data.stage.includes('第一步') ? '【Phase 1: 骨架重构】' : data.stage.includes('第二步') ? '【Phase 2: 血肉拟态】' : `【Action: ${data.stage}】`; if (globalThinkText !== "") { globalThinkText += `\n\n═══════════════════════════\n${stageTitle}\n═══════════════════════════\n\n`; } else { globalThinkText = `${stageTitle}\n\n`; } currentSegmentRaw = ""; currentSegmentThink = ""; document.getElementById('resultText').value = ''; document.getElementById('diffContent').innerHTML = ''; document.getElementById('thinkContent').textContent = globalThinkText; }
+                        if (data.status === 'stage_start') { globalCleanedText = ""; segmentGlobalIndex = 0; let stageTitle = data.stage.includes('第一步') ? '【Phase 1: 骨架重构】' : data.stage.includes('第二步') ? '【Phase 2: 血肉拟态】' : `【Action: ${data.stage}】`; if (globalThinkText !== "") { globalThinkText += `\n\n═══════════════════════════\n${stageTitle}\n═══════════════════════════\n\n`; } else { globalThinkText = `${stageTitle}\n\n`; } currentSegmentRaw = ""; currentSegmentThink = ""; document.getElementById('resultText').value = ''; document.getElementById('diffContent').innerHTML = ''; document.getElementById('thinkContent').textContent = globalThinkText; }
                         else if (data.status === 'meta') { if (data.model) setBadgeStatus('active', data.model); if (data.usage) { if (data.usage.total) { estimatedTokens = data.usage.total; updateSlidingClock('tokenFlipContainer', estimatedTokens); } if (data.usage.cached) { cachedTokens = data.usage.cached; updateSlidingClock('cacheFlipContainer', cachedTokens); } } }
-                        else if (data.status === 'progress') { btn.innerHTML = `<span class="loader"></span><span class="text-[14px]">${data.message}</span>`; if (data.message.includes('第二步')) currentStage = 2; const match = data.message.match(/(\d+)\/(\d+)/); if (match) { const cur = parseInt(match[1]), tot = parseInt(match[2]); progressBar.style.width = `${((currentStage - 1) / totalStages) * 100 + (cur / tot) * (100 / totalStages)}%`; } } 
+                        
+                        // ✨ 替换第 2 处：段落处理进度更新时
+                        else if (data.status === 'progress') { 
+                            updateBtnWithAnimation(btn, `<span class="loader"></span><span class="text-[14px]">${data.message}</span>`); 
+                            if (data.message.includes('第二步')) currentStage = 2; const match = data.message.match(/(\d+)\/(\d+)/); if (match) { const cur = parseInt(match[1]), tot = parseInt(match[2]); progressBar.style.width = `${((currentStage - 1) / totalStages) * 100 + (cur / tot) * (100 / totalStages)}%`; } 
+                        } 
+                        
                         // ======================================================
-                        //      接管后端的 cooldown 信号，启动前端倒计时界面
+                        //      接管后端的 cooldown 信号，启动前端倒计时界面 (你已经改好了！)
                         // ======================================================
                         else if (data.status === 'cooldown') {
                             let secondsLeft = data.duration;
                             if (cooldownInterval) clearInterval(cooldownInterval); // 清理旧定时器
                             
                             // 初始显示
-                            btn.innerHTML = `<span class="loader" style="border-top-color: #F59E0B;"></span><span class="text-[14px]">触发流控保护，冷却倒计时: <span class="font-mono font-bold text-yellow-300">${secondsLeft}</span> s</span>`;
+                            updateBtnWithAnimation(btn, `<span class="loader" style="border-top-color: #F59E0B;"></span><span class="text-[14px]">触发流控保护，冷却倒计时: <span class="font-mono font-bold text-yellow-300">${secondsLeft}</span> s</span>`);
                             
                             // 开启 1 秒执行 1 次的定时器
                             cooldownInterval = setInterval(() => {
                                 secondsLeft--;
                                 if (secondsLeft > 0) {
-                                    btn.innerHTML = `<span class="loader" style="border-top-color: #F59E0B;"></span><span class="text-[14px]">触发流控保护，冷却倒计时: <span class="font-mono font-bold text-yellow-300">${secondsLeft}</span> s</span>`;
+                                    updateBtnWithAnimation(btn, `<span class="loader" style="border-top-color: #F59E0B;"></span><span class="text-[14px]">触发流控保护，冷却倒计时: <span class="font-mono font-bold text-yellow-300">${secondsLeft}</span> s</span>`);
                                 } else {
                                     clearInterval(cooldownInterval);
-                                    btn.innerHTML = `<span class="loader"></span><span class="text-[14px]">冷却结束，正在唤醒引擎...</span>`;
+                                    updateBtnWithAnimation(btn, `<span class="loader"></span><span class="text-[14px]">冷却结束，正在唤醒引擎...</span>`);
                                 }
                             }, 1000);
                         }
                         else if (data.status === 'segment_start') { currentSegmentRaw = ""; currentSegmentThink = ""; } 
                         else if (data.status === 'typing') { currentSegmentRaw += data.content; estimatedTokens += Math.max(1, Math.floor(data.content.length * 0.7)); updateSlidingClock('tokenFlipContainer', estimatedTokens); updateStreamingUI(); } 
                         else if (data.status === 'thinking') { currentSegmentThink += data.content; estimatedTokens += Math.max(1, Math.floor(data.content.length * 0.7)); updateSlidingClock('tokenFlipContainer', estimatedTokens); updateStreamingUI(); } 
-                        else if (data.status === 'segment_end') { globalCleanedText += (globalCleanedText && data.content ? "\n\n" : "") + data.content; let tempThink = currentSegmentThink; const thinkRegex = /<think>([\s\S]*?)(?:<\/think>|$)/g; let m; while ((m = thinkRegex.exec(currentSegmentRaw)) !== null) tempThink += m[1]; if(tempThink) globalThinkText += tempThink + '\n\n---\n\n'; currentSegmentRaw = ""; currentSegmentThink = ""; updateStreamingUI(); } 
+                        else if (data.status === 'segment_end') {
+                             // ✨ 智能拼接判断
+    let isContinuation = false;
+    if (typeof data.is_continuation !== 'undefined') {
+        isContinuation = data.is_continuation;
+    } else if (segmentGlobalIndex < segmentContinuationMap.length) {
+        isContinuation = segmentContinuationMap[segmentGlobalIndex];
+    }
+    
+    if (globalCleanedText && data.content) {
+        // 如果是延续切片，什么都不加；如果是新段落，加一个换行符
+        globalCleanedText += isContinuation ? "" : "\n"; 
+    }
+    globalCleanedText += data.content; 
+    segmentGlobalIndex++; // 游标前进                             
+                             let tempThink = currentSegmentThink; const thinkRegex = /<think>([\s\S]*?)(?:<\/think>|$)/g; let m; while ((m = thinkRegex.exec(currentSegmentRaw)) !== null) tempThink += m[1]; if(tempThink) globalThinkText += tempThink + '\n\n---\n\n'; currentSegmentRaw = ""; currentSegmentThink = ""; updateStreamingUI(); 
+                            } 
                         else if (data.status === 'error') { progressBar.style.opacity = '0'; setTimeout(() => progressBar.style.width = '0%', 300); setBadgeStatus('wait', '中断'); showToast(data.message, "error"); restoreUI(); return; } 
                         else if (data.status === 'done') { progressBar.style.width = '100%'; setTimeout(() => { progressBar.style.opacity = '0'; setTimeout(() => progressBar.style.width = '0%', 300); }, 1000); setBadgeStatus('wait', document.getElementById('detectedModelText').innerText + ' (就绪)'); restoreUI(); if(isDiffEnabled) renderDiff(); saveCurrentTaskToHistory(); showToast('重塑任务圆满完成！', 'success'); 
                             

@@ -1,5 +1,5 @@
 <!-- 划词锁定的悬浮行动按钮 (Action Popup) -->
-<div id="lockPopup" class="fixed z-50 hidden opacity-0 transition-opacity duration-200 pointer-events-auto">
+<div id="lockPopup" class="fixed z-[9999] hidden opacity-0 transition-opacity duration-200 pointer-events-auto">
     <button onclick="window.LockSystem.applyLock()" class="flex items-center gap-1.5 px-3 py-[6px] bg-gray-800/95 dark:bg-gray-100/95 text-white dark:text-black rounded-[8px] shadow-xl text-[13px] font-semibold hover:bg-gray-700 dark:hover:bg-white active:scale-95 backdrop-blur-md border border-white/10 dark:border-black/10">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
         设为免检区
@@ -73,15 +73,34 @@ applyLock: function() {
 
         // 包裹隐形标记
         const newText = text.substring(0, start) + '\u200B' + cleanedSelection + '\u200C' + text.substring(end);
-        textarea.value = newText;
-        this.hidePopup();
+        // ✨ 动效改造开始：拦截原有的瞬间替换逻辑
+        const popupBtn = document.querySelector('#lockPopup button');
+        const originalHtml = popupBtn.innerHTML;
+        const originalClass = popupBtn.className;
 
-        if (typeof window.handleInput === 'function') window.handleInput();
+        // 1. 播放“确认成功”的视觉反馈
+        popupBtn.innerHTML = `<svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> <span class="text-green-400 font-bold tracking-wider">已成功锁定</span>`;
+        // 加入绿色的微光发光阴影和轻微放大效果
+        popupBtn.className = `flex items-center gap-1.5 px-3 py-[6px] bg-gray-800/95 dark:bg-gray-100/95 rounded-[8px] border border-green-500/50 shadow-[0_0_20px_rgba(74,222,128,0.25)] scale-105 transition-all duration-300 backdrop-blur-md`;
 
-        // 保持选中
-        textarea.setSelectionRange(start + 1, start + 1 + cleanedSelection.length);
-    }
-},
+        // 2. 延迟 400ms，让用户看清楚“已锁定”的反馈，再执行真正的底层替换
+        setTimeout(() => {
+            
+            textarea.value = newText;
+            this.hidePopup();
+            
+            if (typeof window.handleInput === 'function') window.handleInput();
+            textarea.setSelectionRange(start + 1, start + 1 + cleanedSelection.length);
+
+            // 恢复按钮的原始状态，为用户的下一次划词做好准备
+            setTimeout(() => {
+                popupBtn.innerHTML = originalHtml;
+                popupBtn.className = originalClass;
+            }, 200);
+
+        }, 400); 
+        }
+    },
         
         clearAllLocks: function() {
             const textarea = document.getElementById('sourceText');
