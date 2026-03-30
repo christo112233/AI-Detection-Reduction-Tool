@@ -1130,7 +1130,10 @@ if (window.isApplyingLock) {
     }
 
     function copyResult() {
-        const text = document.getElementById('resultText').value;
+        // ✨ 新增净化逻辑：拷贝到剪贴板前，自动剔除所有隐形标记，保证纯净输出
+        let text = document.getElementById('resultText').value;
+        text = text.replace(/[\u200B\u200C]/g, ''); 
+        
         if (!text) return showToast('无内容', 'error');
         const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
         showToast('拷贝成功', 'success');

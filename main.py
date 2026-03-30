@@ -205,14 +205,11 @@ def heartbeat():
 # --- 核心处理逻辑 ---
 
 def count_text_length(text: str) -> int:
-    chinese_pattern = re.compile(r'[\u4e00-\u9fff]')
-    chinese_count = len(chinese_pattern.findall(text))
-    if chinese_count > 0:
-        return chinese_count
-    english_pattern = re.compile(r'[a-zA-Z]')
-    return len(english_pattern.findall(text))
+    # ✨ 修复计数器：抛弃奇葩正则，直接返回真实的物理长度，保证前后端毫无分歧
+    return len(text)
 
-def split_text_into_segments(text: str, max_chars: int = 500) -> List[str]:
+def split_text_into_segments(text: str, max_chars: int = 500) -> List[Dict[str, Any]]:
+    # ✨ 核心重构：不仅切片，还要为每个切片打上“是否是延续段（is_continuation）”的身份标签
     paragraphs = text.split('\n')
     segments = []
     for para in paragraphs:
@@ -220,10 +217,11 @@ def split_text_into_segments(text: str, max_chars: int = 500) -> List[str]:
         if not para:
             continue
         if count_text_length(para) <= max_chars:
-            segments.append(para)
+            segments.append({"text": para, "is_continuation": False})
         else:
             sentences = re.split(r'([。！？；!?;])', para)
             current_segment = ""
+            is_first = True
             for i in range(0, len(sentences), 2):
                 sentence = sentences[i]
                 if i + 1 < len(sentences):
@@ -232,10 +230,11 @@ def split_text_into_segments(text: str, max_chars: int = 500) -> List[str]:
                     current_segment += sentence
                 else:
                     if current_segment:
-                        segments.append(current_segment)
+                        segments.append({"text": current_segment, "is_continuation": not is_first})
+                        is_first = False
                     current_segment = sentence
             if current_segment:
-                segments.append(current_segment)
+                segments.append({"text": current_segment, "is_continuation": not is_first})
     return segments
 
 def remove_thinking_tags(text: str) -> str:
@@ -289,7 +288,8 @@ async def optimize_text(req: OptimizeRequest):
             else:
                 extra_body["thinking"] = {"type": "disabled"}
 
-        async def process_stage(stage_segments: List[str], prompt_type: str, stage_name: str):
+        # 改动函数签名，接收 Dict 列表
+        async def process_stage(stage_segments: List[Dict[str, Any]], prompt_type: str, stage_name: str):
             yield ("chunk", json.dumps({"status": "stage_start", "stage": stage_name}) + "\n")
             
             if prompt_type == "polish":
@@ -308,35 +308,32 @@ async def optimize_text(req: OptimizeRequest):
             system_prompt += get_protection_prompt_addition()
 
             history = []
-            results = []
+            results = [] # ✨ 返回的结果也必须是带有 is_continuation 属性的字典列表
             current_model_sent = False
             
             api_call_count = 0  
 
-            for idx, p in enumerate(stage_segments):
+            for idx, seg_info in enumerate(stage_segments):
+                # 读取切片及其排版状态
+                p = seg_info["text"]
+                is_cont = seg_info["is_continuation"]
+                
                 yield ("chunk", json.dumps({"status": "progress", "message": f"{stage_name}: 正在处理 {idx+1}/{len(stage_segments)} 段..."}) + "\n")
                 yield ("chunk", json.dumps({"status": "segment_start"}) + "\n")
 
-                # 如果是免检区，直接原样返回。
-                # 由于这里使用了 continue，代码会直接进入下一个循环，不会增加下方的 api_call_count
                 if is_segment_fully_protected(p):
                     yield ("chunk", json.dumps({"status": "typing", "content": p}) + "\n")
-                    yield ("chunk", json.dumps({"status": "segment_end", "content": p}) + "\n")
-                    results.append(p)
+                    # ✨ 核心：在遇到免检区时，把 is_continuation 指令发给前端！
+                    yield ("chunk", json.dumps({"status": "segment_end", "content": p, "is_continuation": is_cont}) + "\n")
+                    results.append({"text": p, "is_continuation": is_cont})
                     continue
 
-                # ======================================================
-                # ✨ 核心 2：流控冷却拦截逻辑移到免检区判断之后，并使用 api_call_count
-                # ======================================================
                 if req.batch_limit_enabled and api_call_count > 0 and api_call_count % req.batch_size == 0:
                     yield ("chunk", json.dumps({"status": "cooldown", "duration": req.batch_delay}) + "\n")
                     await asyncio.sleep(req.batch_delay)
-                    # 冷却结束后，重新下发一次 progress，把前端的倒计时文字覆盖掉
                     yield ("chunk", json.dumps({"status": "progress", "message": f"{stage_name}: 正在处理 {idx+1}/{len(stage_segments)} 段..."}) + "\n")
                 
-                # ✨ 核心 3：只有真正熬过免检区，准备发给大模型处理的段落，计数器才 +1
                 api_call_count += 1
-                # ======================================================
 
                 messages = [{"role": "system", "content": system_prompt + f"\n\n{task_instruction}"}]
                 
@@ -390,14 +387,15 @@ async def optimize_text(req: OptimizeRequest):
                             yield ("chunk", json.dumps({"status": "typing", "content": content}) + "\n")
                     
                     filtered_content = remove_thinking_tags(full_content).strip()
-                    results.append(filtered_content)
+                    results.append({"text": filtered_content, "is_continuation": is_cont})
                     
                     history.append({"role": "user", "content": p})
                     history.append({"role": "assistant", "content": filtered_content})
                     if len(history) > 4:
                         history = history[-4:]
                     
-                    yield ("chunk", json.dumps({"status": "segment_end", "content": filtered_content}) + "\n")
+                    # ✨ 核心：重塑完成后，将排版拼接指令 is_continuation 下发给前端引擎！
+                    yield ("chunk", json.dumps({"status": "segment_end", "content": filtered_content, "is_continuation": is_cont}) + "\n")
                         
                 except Exception as e:
                     raise Exception(f"处理第{idx+1}段时出错: {str(e)}")

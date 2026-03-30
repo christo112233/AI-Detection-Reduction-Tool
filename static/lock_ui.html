@@ -159,11 +159,13 @@
             });
         },
         
+        // 【核心】：从后端接收时，把占位符还原成原来的文字，并强制补回隐身护盾！
         decodeFromBackend: function(text) {
             if (!text) return text;
             let decoded = text;
             for (const [key, val] of Object.entries(this.lockMap)) {
-                decoded = decoded.split(key).join(val);
+                // ✨ 修复：不仅替换回文字，还要在首尾重新加上 \u200B 和 \u200C
+                decoded = decoded.split(key).join('\u200B' + val + '\u200C');
             }
             return decoded;
         }
