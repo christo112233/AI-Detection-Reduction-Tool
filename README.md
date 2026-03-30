@@ -17,7 +17,7 @@
 DeepVeri，超好用的ai检测程序，使用自研模型，轻量化，可本地部署，精度逼近知网，完全免费！
 
 [![AIGC-Detection](https://img.shields.io/badge/GitHub-AIGC--Detection-green?style=flat-square)](https://github.com/christo112233/AIGC-Detection.git)
-## 使用教程
+## 使用教程与开发文档
 点击右侧Releases下载已经构建好的成品包，解压到本地运行exe程序
 
 具体技术细节请阅读[开发文档.md](./开发文档.md)

@@ -663,6 +663,8 @@
         // 1. 文字和图标先淡出，并伴随极其轻微的向内收缩
         btn.style.opacity = '0.4';
         btn.style.transform = 'scale(0.97)';
+        // ✨ 新增核心逻辑：打断施法！如果上一个动画还没播完（比如还在 150ms 的潜伏期），直接干掉它！
+        if (btn.animTimer) clearTimeout(btn.animTimer);
         
         setTimeout(() => {
             // 2. 在最暗的瞬间，偷换里面的内容
@@ -1358,7 +1360,8 @@ if (window.isApplyingLock) {
             showToast("检测引擎未响应，请检查 5005 端口", "error");
         } finally {
             btn.disabled = false;
-            btn.innerHTML = `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>检测AI率`;
+            // ✨ 改用动画函数恢复按钮，结合上面的 clearTimeout，彻底扼杀残余的“分析中”指令
+            updateBtnWithAnimation(btn, `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>检测AI率`);
         }
     }
 
@@ -1584,6 +1587,8 @@ if (window.isApplyingLock) {
         setBadgeStatus('active', '链路验证中...'); initSlidingClocks(); progressBar.style.opacity = '1'; progressBar.style.width = '2%';
         
         let totalStages = promptType === 'paper_polish_enhance' ? 2 : 1; let currentStage = 1; abortController = new AbortController();
+        // ✨ 1. 新增一个内存变量，存纯净的模型名，默认拿输入框里的
+let currentRunModel = model || "未知模型";
 
         try {
             const response = await fetch('/api/optimize', { 
@@ -1615,7 +1620,13 @@ if (window.isApplyingLock) {
                     try {
                         const data = JSON.parse(line);
                         if (data.status === 'stage_start') { globalCleanedText = ""; segmentGlobalIndex = 0; let stageTitle = data.stage.includes('第一步') ? '【Phase 1: 骨架重构】' : data.stage.includes('第二步') ? '【Phase 2: 血肉拟态】' : `【Action: ${data.stage}】`; if (globalThinkText !== "") { globalThinkText += `\n\n═══════════════════════════\n${stageTitle}\n═══════════════════════════\n\n`; } else { globalThinkText = `${stageTitle}\n\n`; } currentSegmentRaw = ""; currentSegmentThink = ""; document.getElementById('resultText').value = ''; document.getElementById('diffContent').innerHTML = ''; document.getElementById('thinkContent').textContent = globalThinkText; }
-                        else if (data.status === 'meta') { if (data.model) setBadgeStatus('active', data.model); if (data.usage) { if (data.usage.total) { estimatedTokens = data.usage.total; updateSlidingClock('tokenFlipContainer', estimatedTokens); } if (data.usage.cached) { cachedTokens = data.usage.cached; updateSlidingClock('cacheFlipContainer', cachedTokens); } } }
+                        else if (data.status === 'meta') { 
+    if (data.model) {
+        currentRunModel = data.model; // ✨ 2. 如果后端返回了真实模型名，就更新内存变量
+        setBadgeStatus('active', currentRunModel); 
+    }
+    if (data.usage) { 
+                            if (data.usage.total) { estimatedTokens = data.usage.total; updateSlidingClock('tokenFlipContainer', estimatedTokens); } if (data.usage.cached) { cachedTokens = data.usage.cached; updateSlidingClock('cacheFlipContainer', cachedTokens); } } }
                         
                         // ✨ 替换第 2 处：段落处理进度更新时
                         else if (data.status === 'progress') { 
@@ -1665,12 +1676,21 @@ if (window.isApplyingLock) {
                              let tempThink = currentSegmentThink; const thinkRegex = /<think>([\s\S]*?)(?:<\/think>|$)/g; let m; while ((m = thinkRegex.exec(currentSegmentRaw)) !== null) tempThink += m[1]; if(tempThink) globalThinkText += tempThink + '\n\n---\n\n'; currentSegmentRaw = ""; currentSegmentThink = ""; updateStreamingUI(); 
                             } 
                         else if (data.status === 'error') { progressBar.style.opacity = '0'; setTimeout(() => progressBar.style.width = '0%', 300); setBadgeStatus('wait', '中断'); showToast(data.message, "error"); restoreUI(); return; } 
-                        else if (data.status === 'done') { progressBar.style.width = '100%'; setTimeout(() => { progressBar.style.opacity = '0'; setTimeout(() => progressBar.style.width = '0%', 300); }, 1000); setBadgeStatus('wait', document.getElementById('detectedModelText').innerText + ' (就绪)'); restoreUI(); if(isDiffEnabled) renderDiff(); saveCurrentTaskToHistory(); showToast('重塑任务圆满完成！', 'success'); 
-                            
-                            // 任务完成后，自动静默触发 AIGC 对比检测
-                            runAigcDetection(false);
-                            return; 
-                        }
+                        else if (data.status === 'done') { 
+    progressBar.style.width = '100%'; 
+    setTimeout(() => { progressBar.style.opacity = '0'; setTimeout(() => progressBar.style.width = '0%', 300); }, 1000); 
+    
+    // ✨ 3. 彻底抛弃 DOM 读取！无视任何动画延迟，直接用纯净变量拼接
+    setBadgeStatus('wait', currentRunModel + ' (就绪)'); 
+    
+    restoreUI(); 
+    if(isDiffEnabled) renderDiff(); 
+    saveCurrentTaskToHistory(); 
+    showToast('重塑任务圆满完成！', 'success'); 
+    
+    runAigcDetection(false);
+    return; 
+}
                     } catch (e) { }
                 }
             }
