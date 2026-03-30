@@ -273,34 +273,32 @@ window.InspectorSystem = {
                     }
                     if (currentlyLocked) newP += '\u200C';
                     
-                    // ✨ 动效改造开始：拦截瞬间替换，注入主界面的绿光确认动画
+                    // ✨ 动效改造开始：
                     const popupBtn = document.querySelector('#inspectorLockPopup button');
                     const originalHtml = popupBtn.innerHTML;
                     const originalClass = popupBtn.className;
 
-                    // 变成绿色打勾状态，带点轻微的放大和发光
+                    // 1. 悬浮窗立刻变成绿色打勾
                     popupBtn.innerHTML = `<svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> <span class="text-green-400 font-bold tracking-wider">已成功锁定</span>`;
                     popupBtn.className = `flex items-center gap-1.5 px-3 py-[6px] bg-gray-800/95 dark:bg-gray-100/95 rounded-[8px] border border-green-500/50 shadow-[0_0_20px_rgba(74,222,128,0.25)] scale-105 transition-all duration-300 backdrop-blur-md`;
 
-                    // 延迟 400ms，让用户看爽这个“已锁定”的视觉反馈，再执行真正的底层替换
+                    // 2. ✨ 核心修改：打破延迟，立刻重绘，透视面板上的灰色块瞬间伴随闪光浮现！
+                    window.isInspectorLocking = true;
+                    this.paragraphs[paraIdx] = newP;
+                    this.render(); 
+                    window.isInspectorLocking = false; // 渲染完立刻关掉标志
+                    
+                    if (window.getSelection) window.getSelection().removeAllRanges();
+
+                    // 3. 让悬浮窗展示 350ms 后退场
                     setTimeout(() => {
-                        window.isInspectorLocking = true; // ✨ 开启透视界面的闪光标志
-
-                        this.paragraphs[paraIdx] = newP;
-                        this.render(); // 重新渲染，灰色的免检区伴随闪光出现
-                        
-                        window.isInspectorLocking = false; // ✨ 渲染完毕立刻关闭标志
-
-                        // 隐藏悬浮窗并清除鼠标选中状态
                         this.hidePopup();
-                        if (window.getSelection) window.getSelection().removeAllRanges();
                         
-                        // 等悬浮窗彻底变透明隐藏后，偷偷把按钮恢复原样，等待下次划词
                         setTimeout(() => {
                             popupBtn.innerHTML = originalHtml;
                             popupBtn.className = originalClass;
                         }, 200);
-                    }, 400);
+                    }, 350);
                     
                     // 核心：拦截成功，带动画退出
                     return; 

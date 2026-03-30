@@ -1035,7 +1035,7 @@
         if (!text) { underlay.innerHTML = ''; return; }
         const paragraphs = text.split('\n'); let html = ''; let colorToggle = false;
         const c1 = 'bg-[#FF9F0A]/15 border-b-[2px] border-[#FF9F0A]/30'; const c2 = 'bg-[#0A84FF]/15 border-b-[2px] border-[#0A84FF]/30';
-        let lockColorClass = 'bg-gray-300/80 dark:bg-[#2C2C2E] text-gray-800 dark:text-transparent rounded-[3px] shadow-[0_0_0_2px_rgba(209,213,219,0.8)] dark:shadow-[0_0_0_2px_rgba(255,255,255,0.15)] relative z-10 mx-[1px]';
+        let lockColorClass = 'bg-gray-300/80 dark:bg-[#2C2C2E] text-transparent rounded-[3px] shadow-[0_0_0_2px_rgba(209,213,219,0.8)] dark:shadow-[0_0_0_2px_rgba(255,255,255,0.15)] relative z-10 mx-[1px]';
 
 // ✨ 侦测到瞬时锁定标志时，追加动画类
 if (window.isApplyingLock) {

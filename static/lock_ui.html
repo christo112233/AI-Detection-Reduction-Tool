@@ -1,4 +1,3 @@
-<!-- 划词锁定的悬浮行动按钮 (Action Popup) -->
 <div id="lockPopup" class="fixed z-[9999] hidden opacity-0 transition-opacity duration-200 pointer-events-auto">
     <button onclick="window.LockSystem.applyLock()" class="flex items-center gap-1.5 px-3 py-[6px] bg-gray-800/95 dark:bg-gray-100/95 text-white dark:text-black rounded-[8px] shadow-xl text-[13px] font-semibold hover:bg-gray-700 dark:hover:bg-white active:scale-95 backdrop-blur-md border border-white/10 dark:border-black/10">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
@@ -8,7 +7,7 @@
 
 <script>
     window.LockSystem = {
-        lockMap: {}, // 存储 [PROTECTED_X] 到 原文 的映射字典
+        lockMap: {}, 
         
         init: function() {
             const textarea = document.getElementById('sourceText');
@@ -23,99 +22,131 @@
         },
         
         handleSelection: function(e) {
-    const textarea = document.getElementById('sourceText');
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selectedText = textarea.value.substring(start, end).trim();
-    
-    if (start !== end && selectedText.length > 0) {
-        const popup = document.getElementById('lockPopup');
-        let x = e.clientX || textarea.getBoundingClientRect().left + textarea.offsetWidth / 2;
-        let y = e.clientY || textarea.getBoundingClientRect().top + textarea.offsetHeight / 2;
-        
-        popup.style.left = `${x}px`;
-        popup.style.top = `${y - 40}px`;
-        popup.classList.remove('hidden');
-        setTimeout(() => popup.classList.remove('opacity-0'), 10);
-    } else {
-        this.hidePopup();
-    }
-},
+            const textarea = document.getElementById('sourceText');
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const selectedText = textarea.value.substring(start, end).trim();
+            
+            if (start !== end && selectedText.length > 0) {
+                const popup = document.getElementById('lockPopup');
+                let x = e.clientX || textarea.getBoundingClientRect().left + textarea.offsetWidth / 2;
+                let y = e.clientY || textarea.getBoundingClientRect().top + textarea.offsetHeight / 2;
+                
+                popup.style.left = `${x}px`;
+                popup.style.top = `${y - 40}px`;
+                popup.classList.remove('hidden');
+                setTimeout(() => popup.classList.remove('opacity-0'), 10);
+            } else {
+                this.hidePopup();
+            }
+        },
 
-hidePopup: function() {
-    const popup = document.getElementById('lockPopup');
-    popup.classList.add('opacity-0');
-    setTimeout(() => popup.classList.add('hidden'), 200);
-},
+        hidePopup: function() {
+            const popup = document.getElementById('lockPopup');
+            if (popup) {
+                popup.classList.add('opacity-0');
+                setTimeout(() => popup.classList.add('hidden'), 200);
+            }
+        },
 
-applyLock: function() {
-    const textarea = document.getElementById('sourceText');
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    if (start !== end) {
-        const text = textarea.value;
-        const prefix = text.substring(0, start);
-        const selected = text.substring(start, end);
+        applyLock: function() {
+            const textarea = document.getElementById('sourceText');
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            if (start === end) {
+                this.hidePopup();
+                return;
+            }
 
-        // 计算当前是否已经在锁定区内
-        const openCount = (prefix.match(/\u200B/g) || []).length;
-        const closeCount = (prefix.match(/\u200C/g) || []).length;
-        const isInsideLocked = openCount > closeCount;
+            const rawText = textarea.value;
 
-        // ✅ 关键：如果已经在锁内，直接跳过，禁止嵌套
-        if (isInsideLocked) {
-            this.hidePopup();
-            return;
-        }
+            // ✨ 动效准备：悬浮窗瞬间变绿打勾
+            const popupBtn = document.querySelector('#lockPopup button');
+            const originalHtml = popupBtn.innerHTML;
+            const originalClass = popupBtn.className;
+            popupBtn.innerHTML = `<svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> <span class="text-green-400 font-bold tracking-wider">已成功锁定</span>`;
+            popupBtn.className = `flex items-center gap-1.5 px-3 py-[6px] bg-gray-800/95 dark:bg-gray-100/95 rounded-[8px] border border-green-500/50 shadow-[0_0_20px_rgba(74,222,128,0.25)] scale-105 transition-all duration-300 backdrop-blur-md`;
 
-        // 清理内部重叠标记
-        const cleanedSelection = selected.replace(/\u200B/g, '').replace(/\u200C/g, '');
+            // ================= 核心重构：一维状态机引擎 =================
+            
+            let cleanChars = [];
+            let locked = [];
+            let isCurrentlyLocked = false;
+            let newStart = -1;
+            let newEnd = -1;
 
-        // 包裹隐形标记
-        const newText = text.substring(0, start) + '\u200B' + cleanedSelection + '\u200C' + text.substring(end);
-        // ✨ 动效改造开始：拦截原有的瞬间替换逻辑
-        const popupBtn = document.querySelector('#lockPopup button');
-        const originalHtml = popupBtn.innerHTML;
-        const originalClass = popupBtn.className;
+            for (let i = 0; i <= rawText.length; i++) {
+                if (i === start) newStart = cleanChars.length;
+                if (i === end) newEnd = cleanChars.length;
 
-        // 1. 播放“确认成功”的视觉反馈
-        popupBtn.innerHTML = `<svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> <span class="text-green-400 font-bold tracking-wider">已成功锁定</span>`;
-        // 加入绿色的微光发光阴影和轻微放大效果
-        popupBtn.className = `flex items-center gap-1.5 px-3 py-[6px] bg-gray-800/95 dark:bg-gray-100/95 rounded-[8px] border border-green-500/50 shadow-[0_0_20px_rgba(74,222,128,0.25)] scale-105 transition-all duration-300 backdrop-blur-md`;
+                if (i === rawText.length) break;
 
-       // 2. 延迟 400ms，让用户看清楚“已锁定”的反馈，再执行真正的底层替换
-        setTimeout(() => {
-            window.isApplyingLock = true; // ✨ 开启护盾闪光标志
+                if (rawText[i] === '\u200B') {
+                    isCurrentlyLocked = true;
+                } else if (rawText[i] === '\u200C') {
+                    isCurrentlyLocked = false;
+                } else {
+                    cleanChars.push(rawText[i]);
+                    locked.push(isCurrentlyLocked); // 记录每个字符当前的锁定状态
+                }
+            }
 
+            // 状态融合：将新划选的交叉区间无脑“涂黑”
+            for (let i = newStart; i < newEnd; i++) {
+                locked[i] = true;
+            }
+
+            // 完美重组：根据全新的平铺状态图层，重新注入隐身衣
+            let newText = "";
+            isCurrentlyLocked = false;
+            let finalCursorPos = -1;
+
+            for (let i = 0; i < cleanChars.length; i++) {
+                if (locked[i] && !isCurrentlyLocked) {
+                    newText += '\u200B';
+                    isCurrentlyLocked = true;
+                } else if (!locked[i] && isCurrentlyLocked) {
+                    newText += '\u200C';
+                    isCurrentlyLocked = false;
+                }
+
+                if (i === newEnd) finalCursorPos = newText.length;
+                newText += cleanChars[i];
+            }
+
+            if (isCurrentlyLocked) newText += '\u200C';
+            if (finalCursorPos === -1) finalCursorPos = newText.length;
+
+            // ========================================================
+
+            // 4. 瞬间执行底层替换与渲染，触发闪光
+            window.isApplyingLock = true;
             textarea.value = newText;
-            this.hidePopup();
-            
-            if (typeof window.handleInput === 'function') window.handleInput(); // 这里同步触发渲染，此时标志为 true
-            
-            window.isApplyingLock = false; // ✨ 渲染完毕立刻关闭标志，确保后续打字绝对不闪！
+            if (typeof window.handleInput === 'function') window.handleInput();
+            window.isApplyingLock = false;
 
-            textarea.setSelectionRange(start + 1, start + 1 + cleanedSelection.length);
+            // 把光标平滑地放在划词结束的位置，方便用户继续阅读
+            textarea.setSelectionRange(finalCursorPos, finalCursorPos);
 
-            // 恢复按钮的原始状态，为用户的下一次划词做好准备
+            // 5. 悬浮窗优雅退场
             setTimeout(() => {
-                popupBtn.innerHTML = originalHtml;
-                popupBtn.className = originalClass;
-            }, 200);
-
-        }, 400); 
-        }
-    },
+                this.hidePopup();
+                // 等悬浮窗彻底透明后，偷偷复原按钮状态
+                setTimeout(() => {
+                    popupBtn.innerHTML = originalHtml;
+                    popupBtn.className = originalClass;
+                }, 200);
+            }, 350);
+        },
         
         clearAllLocks: function() {
             const textarea = document.getElementById('sourceText');
-            // 一键褪去所有隐身衣
             textarea.value = textarea.value.replace(/\u200B/g, '').replace(/\u200C/g, '');
             this.lockMap = {};
             if(typeof window.handleInput === 'function') window.handleInput();
             if(typeof window.showToast === 'function') window.showToast('所有免检区已解除', 'success');
         },
         
-        // 【核心】：发给后端前，把隐身衣替换成占位符
         encodeForBackend: function(text) {
             this.lockMap = {};
             let counter = 0;
@@ -128,7 +159,6 @@ applyLock: function() {
             });
         },
         
-        // 【核心】：从后端接收时，把占位符还原成原来的文字
         decodeFromBackend: function(text) {
             if (!text) return text;
             let decoded = text;
