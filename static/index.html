@@ -1005,7 +1005,9 @@
     function renderDiff() {
         if (!isDiffEnabled) return;
         const source = document.getElementById('sourceText').value.replace(/\u200B/g, '').replace(/\u200C/g, '');
-        const result = document.getElementById('resultText').value;
+        // ✨ 加上正则清洗，把右侧结果里的隐形护盾脱掉再进行纯净对比
+        const result = document.getElementById('resultText').value.replace(/[\u200B\u200C]/g, '');
+        
         if(!source && !result) { document.getElementById('diffContent').innerHTML = ''; return; }
         const diffs = dmp.diff_main(source, result); dmp.diff_cleanupSemantic(diffs);
         let html = '';
