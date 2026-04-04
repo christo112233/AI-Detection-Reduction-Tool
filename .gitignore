@@ -10,7 +10,6 @@ env/
 .env/
 ENV/
 config.json
-task_history.json
 
 # 打包生成的文件（你刚才 build 出来的）
 dist/
@@ -24,3 +23,4 @@ build/
 .idea/
 .vscode/
 .DS_Store
+task_history.json
