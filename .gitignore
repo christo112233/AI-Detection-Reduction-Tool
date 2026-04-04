@@ -3,13 +3,14 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# 虚拟环境（最关键）
+# 虚拟环境
 venv/
 env/
 .venv/
 .env/
 ENV/
 config.json
+task_history.json
 
 # 打包生成的文件（你刚才 build 出来的）
 dist/

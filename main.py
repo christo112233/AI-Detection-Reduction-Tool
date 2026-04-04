@@ -47,6 +47,11 @@ class OptimizeRequest(BaseModel):
     batch_limit_enabled: bool = False
     batch_size: int = 20
     batch_delay: int = 60
+    # === ✨ 新增：大模型核心采样参数 ===
+    temperature: float = 1.0
+    top_p: float = 1.0
+    frequency_penalty: float = 0.0
+    presence_penalty: float = 0.0
 
 class DeleteConfigRequest(BaseModel):
     index: int
@@ -75,11 +80,18 @@ def load_local_config():
             return {}
     return {}
 
-def save_local_config(api_key: str, base_url: str, model: str):
+def save_local_config(api_key: str, base_url: str, model: str, 
+                      temperature: float = 1.0, top_p: float = 1.0, 
+                      frequency_penalty: float = 0.0, presence_penalty: float = 0.0):
     config_data = load_local_config()
     config_data["api_key"] = api_key
     config_data["base_url"] = base_url
     config_data["model"] = model
+    # ✨ 存入本地字典
+    config_data["temperature"] = temperature
+    config_data["top_p"] = top_p
+    config_data["frequency_penalty"] = frequency_penalty
+    config_data["presence_penalty"] = presence_penalty
     
     history = config_data.get("history", [])
     history = [h for h in history if not (h.get("model") == model and h.get("base_url") == base_url)]
@@ -254,7 +266,10 @@ async def optimize_text(req: OptimizeRequest):
     if not req.text.strip():
         raise HTTPException(status_code=400, detail="处理内容不能为空")
         
-    save_local_config(req.api_key, req.base_url, req.model)
+    save_local_config(
+        req.api_key, req.base_url, req.model,
+        req.temperature, req.top_p, req.frequency_penalty, req.presence_penalty
+    )
 
     async def generate_stream():
         client = AsyncOpenAI(
@@ -263,6 +278,9 @@ async def optimize_text(req: OptimizeRequest):
             timeout=60.0, 
             max_retries=1
         )
+        # ✨ 1. 终极账本：整个 generate_stream 运行期间只初始化这一次！
+        global_total_tokens = 0
+        global_cached_tokens = 0
         
         segments = split_text_into_segments(req.text)
         yield json.dumps({"status": "progress", "message": f"长文已智能切分为 {len(segments)} 段..."}) + "\n"
@@ -291,6 +309,8 @@ async def optimize_text(req: OptimizeRequest):
         # 改动函数签名，接收 Dict 列表
         async def process_stage(stage_segments: List[Dict[str, Any]], prompt_type: str, stage_name: str):
             yield ("chunk", json.dumps({"status": "stage_start", "stage": stage_name}) + "\n")
+            # ✨ 2. 声明我们要操作的是外面那个总账本，不要新建局部变量
+            nonlocal global_total_tokens, global_cached_tokens
             
             if prompt_type == "polish":
                 system_prompt = get_default_polish_prompt()
@@ -312,6 +332,8 @@ async def optimize_text(req: OptimizeRequest):
             current_model_sent = False
             
             api_call_count = 0  
+
+           
 
             for idx, seg_info in enumerate(stage_segments):
                 # 读取切片及其排版状态
@@ -348,9 +370,13 @@ async def optimize_text(req: OptimizeRequest):
                     kwargs = {
                         "model": active_model,
                         "messages": messages,
-                        "temperature": 0.7,
                         "stream": True,
-                        "stream_options": {"include_usage": True}
+                        "stream_options": {"include_usage": True},
+                        # === ✨ 核心魔法：接管用户传入的四大参数 ===
+                        "temperature": req.temperature,
+                        "top_p": req.top_p,
+                        "frequency_penalty": req.frequency_penalty,
+                        "presence_penalty": req.presence_penalty
                     }
                     if extra_body:
                         kwargs["extra_body"] = extra_body
@@ -363,14 +389,28 @@ async def optimize_text(req: OptimizeRequest):
                             yield ("chunk", json.dumps({"status": "meta", "model": chunk.model}) + "\n")
                             current_model_sent = True
                             
+                        # === ✨ 核心修改区域：接管 Token 计算 ===
                         if hasattr(chunk, 'usage') and chunk.usage:
-                            usage_dict = {"total": chunk.usage.total_tokens}
+                            # 1. 提取当前这一小段的原始消耗
+                            current_total = chunk.usage.total_tokens
+                            current_cached = 0
+                            
+                            # 2. 提取当前这一小段的缓存命中
                             if hasattr(chunk.usage, 'prompt_tokens_details') and chunk.usage.prompt_tokens_details:
-                                cached = getattr(chunk.usage.prompt_tokens_details, 'cached_tokens', 0)
-                                if cached: usage_dict["cached"] = cached
+                                current_cached = getattr(chunk.usage.prompt_tokens_details, 'cached_tokens', 0)
                             elif hasattr(chunk.usage, 'prompt_cache_hit_tokens'):
-                                cached = getattr(chunk.usage.prompt_cache_hit_tokens, 'cached_tokens', 0)
-                                if cached: usage_dict["cached"] = cached
+                                current_cached = getattr(chunk.usage.prompt_cache_hit_tokens, 'cached_tokens', 0)
+                            
+                            # 3. 核心魔法：向全局账本进行“滚雪球”累加
+                            global_total_tokens += current_total
+                            global_cached_tokens += current_cached
+                            
+                            # 4. 把累加后的【总数据】打包准备发给前端
+                            usage_dict = {"total": global_total_tokens}
+                            if global_cached_tokens > 0:
+                                usage_dict["cached"] = global_cached_tokens
+                                
+                            # 5. 发送最终的全局账本数据
                             yield ("chunk", json.dumps({"status": "meta", "usage": usage_dict}) + "\n")
 
                         if not chunk.choices:

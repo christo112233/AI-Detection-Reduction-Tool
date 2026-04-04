@@ -314,7 +314,7 @@
             <svg class="w-6 h-6 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path></svg>
             API 引擎配置中心
         </h3>
-        <div class="space-y-5 text-[14px]">
+        <div class="space-y-5 text-[14px] max-h-[65vh] overflow-y-auto report-scroll pr-2 pb-2">
             <div id="historyConfigWrapper" class="hidden">
                 <label class="block text-gray-500 dark:text-gray-400 mb-1.5 font-medium">快捷使用历史</label>
                 <div class="flex items-center gap-2">
@@ -333,6 +333,33 @@
             <div>
                 <label class="block text-gray-500 dark:text-gray-400 mb-1.5 font-medium">选用模型 (Model)</label>
                 <input type="text" id="model" oninput="clearDropdownSelection()" placeholder="qwen-max / deepseek-chat" class="apple-input w-full px-4 py-3 rounded-xl">
+            </div>
+
+           
+
+            <div class="pt-4 border-t border-gray-200/60 dark:border-gray-700/60 mt-4">
+                <label class="block text-gray-600 dark:text-gray-300 font-bold mb-3 flex items-center gap-2">
+                    <svg class="w-[18px] h-[18px] text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                    大模型高级采样参数
+                </label>
+                <div class="grid grid-cols-2 gap-4 bg-gray-50/50 dark:bg-gray-800/30 p-3.5 rounded-xl border border-gray-100 dark:border-gray-700/50">
+                    <div>
+                        <label class="block text-[12px] text-gray-500 dark:text-gray-400 mb-1 font-medium" title="控制输出的随机性。值越大越发散、创造性越强。">Temperature (发散度)</label>
+                        <input type="number" id="temperature" step="0.1" min="0" max="2" value="1.0" class="apple-input w-full px-3 py-2 rounded-lg text-[13px]">
+                    </div>
+                    <div>
+                        <label class="block text-[12px] text-gray-500 dark:text-gray-400 mb-1 font-medium" title="核采样。控制词汇选择的概率阈值。">Top P (核采样)</label>
+                        <input type="number" id="top_p" step="0.1" min="0" max="1" value="1.0" class="apple-input w-full px-3 py-2 rounded-lg text-[13px]">
+                    </div>
+                    <div>
+                        <label class="block text-[12px] text-gray-500 dark:text-gray-400 mb-1 font-medium" title="降低模型重复使用相同词汇的概率。">Freq Penalty</label>
+                        <input type="number" id="frequency_penalty" step="0.1" min="-2" max="2" value="0.0" class="apple-input w-full px-3 py-2 rounded-lg text-[13px]">
+                    </div>
+                    <div>
+                        <label class="block text-[12px] text-gray-500 dark:text-gray-400 mb-1 font-medium" title="鼓励模型探讨新主题，避免在同一话题上打转。">Pres Penalty</label>
+                        <input type="number" id="presence_penalty" step="0.1" min="-2" max="2" value="0.0" class="apple-input w-full px-3 py-2 rounded-lg text-[13px]">
+                    </div>
+                </div>
             </div>
 
             <div class="pt-2 border-t border-gray-200/60 dark:border-gray-700/60">
@@ -1442,6 +1469,12 @@ if (window.isApplyingLock) {
             document.getElementById('baseUrl').value = config.base_url || "https://api.openai.com/v1"; 
             document.getElementById('apiKey').value = config.api_key || ""; 
             document.getElementById('model').value = config.model || "gpt-4o";
+            // ✨ 1. 新增：恢复高级采样参数
+            if (config.temperature !== undefined) document.getElementById('temperature').value = config.temperature;
+            if (config.top_p !== undefined) document.getElementById('top_p').value = config.top_p;
+            if (config.frequency_penalty !== undefined) document.getElementById('frequency_penalty').value = config.frequency_penalty;
+            if (config.presence_penalty !== undefined) document.getElementById('presence_penalty').value = config.presence_penalty;
+            // ========================
             if (config.history && config.history.length > 0) { configHistoryData = config.history; renderHistoryDropdown(); }
             
             // --- 新增：还原流控配置 ---
@@ -1472,6 +1505,11 @@ if (window.isApplyingLock) {
         if (index !== "") {
             const item = configHistoryData[index];
             document.getElementById('baseUrl').value = item.base_url; document.getElementById('apiKey').value = item.api_key; document.getElementById('model').value = item.model;
+            // ✨ 2. 新增：切换快捷历史时，同步切换高级参数
+            if (item.temperature !== undefined) document.getElementById('temperature').value = item.temperature;
+            if (item.top_p !== undefined) document.getElementById('top_p').value = item.top_p;
+            if (item.frequency_penalty !== undefined) document.getElementById('frequency_penalty').value = item.frequency_penalty;
+            if (item.presence_penalty !== undefined) document.getElementById('presence_penalty').value = item.presence_penalty;
         }
     }
     function clearDropdownSelection() { document.getElementById('configHistory').value = ""; }
@@ -1560,6 +1598,11 @@ if (window.isApplyingLock) {
         // --- 新增：获取流控参数 ---
         const batchSize = parseInt(document.getElementById('batchSize').value) || 20;
         const batchDelay = parseInt(document.getElementById('batchDelay').value) || 60;
+        // ✨ 3. 新增：获取四大高级采样参数
+        const temperature = parseFloat(document.getElementById('temperature').value) || 1.0;
+        const top_p = parseFloat(document.getElementById('top_p').value) || 1.0;
+        const frequency_penalty = parseFloat(document.getElementById('frequency_penalty').value) || 0.0;
+        const presence_penalty = parseFloat(document.getElementById('presence_penalty').value) || 0.0;
 
         if (!text) return showToast("输入源不可为空", "error"); if (!apiKey) { toggleSettings(); return showToast("请键入 API Key", "info"); }
         if(window.LockSystem) text = window.LockSystem.encodeForBackend(text);
@@ -1610,7 +1653,13 @@ let currentRunModel = model || "未知模型";
              // --- 新增：将流控参数发给后端 ---
             batch_limit_enabled: isRateLimitEnabled,
             batch_size: batchSize,
-            batch_delay: batchDelay   
+            batch_delay: batchDelay,
+            // ✨ 4. 新增：将参数发送给后端
+                    temperature: temperature,
+                    top_p: top_p,
+                    frequency_penalty: frequency_penalty,
+                    presence_penalty: presence_penalty
+
             }), 
             signal: abortController.signal });
             if (!response.ok) throw new Error((await response.json()).detail || '链路失败');

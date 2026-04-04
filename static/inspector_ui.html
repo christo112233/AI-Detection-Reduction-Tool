@@ -346,6 +346,28 @@ window.InspectorSystem = {
             
             const cardBg = isFull ? 'bg-gray-100/50 dark:bg-gray-800/30 border-gray-200 dark:border-gray-700 opacity-60 grayscale-[50%]' : 'bg-white dark:bg-gray-800/90 border-gray-200/80 dark:border-gray-700/80 shadow-md';
             
+// ================= ✨ 新增：非侵入式 AI 率匹配引擎 =================
+        let aiBadgeHtml = '';
+        try {
+            // 修复：直接读取全局变量 lastDetectReportData，不使用 window 挂载
+            if (typeof lastDetectReportData !== 'undefined' && lastDetectReportData && lastDetectReportData.source && lastDetectReportData.source.details) {
+                let cleanP = p.replace(/[\u200B\u200C]/g, '').trim();
+                let detail = lastDetectReportData.source.details.find(d => d.text.trim() === cleanP);
+                if (detail) {
+                    if (detail.ignored) {
+                        aiBadgeHtml = `<span class="inline-flex items-center justify-center px-1.5 py-[2px] rounded border border-gray-200 dark:border-gray-700 text-[10px] font-bold bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 mb-1.5 mr-2 align-middle shadow-sm">短句免检</span>`;
+                    } else {
+                        let ratio = (detail.ai_ratio * 100).toFixed(1);
+                        let colorCls = detail.ai_ratio < 0.3 ? 'bg-green-50 text-green-600 border-green-200 dark:bg-green-500/10 dark:text-green-400 dark:border-green-800' :
+                                       detail.ai_ratio < 0.7 ? 'bg-yellow-50 text-yellow-600 border-yellow-200 dark:bg-yellow-500/10 dark:text-yellow-400 dark:border-yellow-800' :
+                                       'bg-red-50 text-red-600 border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-800';
+                        aiBadgeHtml = `<span class="inline-flex items-center justify-center px-1.5 py-[2px] rounded border text-[10px] font-bold font-mono mb-1.5 mr-2 align-middle shadow-sm ${colorCls}">AI: ${ratio}%</span>`;
+                    }
+                }
+            }
+        } catch (e) { console.error("AI徽章渲染错误:", e); }
+        // ================= ✨ 新增结束 =================
+
             html += `
             <div class="inspector-card flex gap-4 p-5 rounded-2xl border ${cardBg} transition-all duration-300" data-idx="${idx}">
                 <!-- 左侧序号 -->
@@ -354,7 +376,7 @@ window.InspectorSystem = {
                 </div>
                 <!-- 中间文本 -->
                 <div class="flex-1 text-[15px] leading-[1.8] text-gray-800 dark:text-gray-200 selection:bg-indigo-200 dark:selection:bg-indigo-900">
-                    ${displayHtml}
+                    ${aiBadgeHtml}${displayHtml}
                 </div>
                 <!-- 右侧拨动开关 -->
                 <div class="shrink-0 flex flex-col items-center justify-center gap-2 pl-4 border-l border-gray-100 dark:border-gray-700/50">
