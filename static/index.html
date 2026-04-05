@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN" class="antialiased">
 <head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.21/mammoth.browser.min.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI降重系统</title>
@@ -35,6 +36,8 @@
     </script>
 
     <style>
+
+     
 
         /* ✨ 新增：免检区激活入场动画系统 (主界面 + 透视面板通用引擎) */
     /* ✨ 新增：免检区激活「护盾充能」闪光过渡动画 */
@@ -107,7 +110,7 @@
         /* ================= 基础视觉系统 ================= */
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            transition: background-color 0.4s ease, color 0.4s ease;
+            
         }
         
         .glass-panel {
@@ -260,10 +263,35 @@
         .report-scroll::-webkit-scrollbar { width: 6px; }
         .report-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
         .dark .report-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
+        /* ✨ 新增：深浅色涟漪过渡底层支持 */
+        ::view-transition-old(root),
+        ::view-transition-new(root) {
+            animation: none;
+            mix-blend-mode: normal;
+        }
+        /* 确保新视图永远在旧视图的上方层叠展开 */
+        ::view-transition-new(root) {
+            z-index: 2;
+        }
+        ::view-transition-old(root) {
+            z-index: 1;
+        }
+        /* ================= ✨ 纯加法：按钮光标追踪流光引擎 ================= */
+        .btn-spotlight { position: relative; overflow: hidden; }
+        .btn-spotlight::after {
+            content: ''; 
+            position: absolute; 
+            inset: 0; /* 铺满整个按钮 */
+            /* 核心：画一个以 --x 和 --y 为圆心的渐变白光手电筒，向外 60px 衰减 */
+            background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), rgba(255, 255, 255, 0.3) 0%, transparent 60px);
+            opacity: 0; 
+            transition: opacity 0.3s ease; 
+            pointer-events: none; /* 让光圈无法被点击，不挡底层事件 */
+        }
+        .btn-spotlight:hover::after { opacity: 1; }
     </style>
 </head>
-<body class="bg-apple-light dark:bg-apple-dark text-apple-grayLight dark:text-apple-grayDark p-4 md:p-6 lg:p-8 relative h-screen flex flex-col overflow-hidden">
-
+<body class="bg-apple-light dark:bg-apple-dark text-apple-grayLight dark:text-apple-grayDark p-4 md:p-6 lg:p-8 relative min-h-screen lg:h-screen flex flex-col lg:overflow-hidden">
 <!-- Toast 弹窗 -->
 <div id="toast" class="glass-panel px-6 py-3.5 rounded-full flex items-center shadow-xl font-semibold text-[14px] text-gray-800 dark:text-gray-100 z-[60]">
     <span id="toastIcon" class="mr-2.5 flex items-center"></span>
@@ -407,13 +435,13 @@
 <div class="max-w-[1800px] w-full mx-auto flex flex-col flex-1 h-full">
     
     <!-- Header -->
-    <header class="flex items-center justify-between mb-5 shrink-0 px-1 z-20">
+    <header class="flex flex-col xl:flex-row items-start xl:items-center justify-between mb-5 shrink-0 px-1 z-20 gap-4">
         <div class="flex flex-col">
             <h1 class="text-3xl lg:text-[34px] font-extrabold tracking-tight text-gradient leading-tight">AI降重系统</h1>
             <p class="text-[13px] text-gray-500 dark:text-gray-400 mt-1 font-medium hidden md:block">多维语义重构，生成具备“人类智慧印记”的高级防检测文本。</p>
         </div>
         
-        <div class="flex items-center gap-2.5 md:gap-4">
+        <div class="flex flex-wrap items-center gap-2.5 md:gap-4">
             <!-- ✨ 新增：DeepVeri 节点状态指示灯 -->
             <div id="dvHealthBadge" class="flex items-center justify-center gap-1.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-full shadow-sm transition-all duration-300 cursor-default" title="DeepVeri 本地服务心跳状态">
                 <div id="dvHealthDot" class="w-2 h-2 rounded-full bg-gray-400"></div>
@@ -435,7 +463,7 @@
                 <span class="text-[12px] font-bold text-gray-500 dark:text-gray-400" id="detectedModelText">等待调度...</span>
             </div>
             
-            <button onclick="toggleTheme()" class="p-2.5 rounded-full bg-gray-200/60 dark:bg-gray-800/60 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 active:scale-95 shadow-sm transition-colors">
+            <button onclick="toggleTheme(event)" class="p-2.5 rounded-full bg-gray-200/60 dark:bg-gray-800/60 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 active:scale-95 shadow-sm transition-colors">
                 <svg id="themeIconDark" class="w-[18px] h-[18px] hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
                 <svg id="themeIconLight" class="w-[18px] h-[18px] block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
             </button>
@@ -476,8 +504,8 @@
             <button id="stopBtn" onclick="stopOptimization()" class="hidden fade-slide-enter w-full md:w-auto px-6 py-[10px] bg-red-500 hover:bg-red-600 text-white rounded-[12px] font-semibold text-[14px] shadow-[0_4px_14px_rgba(239,68,68,0.3)] active:scale-[0.96] transition-all">
                 <div class="flex items-center justify-center"><svg class="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clip-rule="evenodd"></path></svg>紧急终止</div>
             </button>
-            <button id="processBtn" onclick="startOptimization()" class="w-full md:w-auto px-10 py-[10px] bg-[#0071e3] hover:bg-[#0060c2] text-white rounded-[12px] font-semibold text-[14px] shadow-[0_4px_14px_rgba(0,113,227,0.3)] active:scale-[0.96] transition-all">
-                开始执行重塑
+            <button id="processBtn" onclick="startOptimization()" class="w-full md:w-auto px-10 py-[10px] bg-[#0071e3] hover:bg-[#006bd6] text-white rounded-[12px] font-semibold text-[14px] shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_4px_0_#004a94,0_8px_15px_rgba(0,113,227,0.4)] active:translate-y-[4px] active:shadow-[inset_0_1px_1px_rgba(255,255,255,0.3),0_0px_0_#004a94,0_2px_4px_rgba(0,113,227,0.4)] transition-all duration-150 ease-out btn-spotlight">
+            开始执行重塑
             </button>
         </div>
     </div>
@@ -486,7 +514,7 @@
     <div class="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-5 px-1 pb-4 h-full">
         
         <!-- 左舷 -->
-        <div class="glass-panel rounded-[24px] flex flex-col overflow-hidden relative shadow-sm h-full">
+        <div class="glass-panel rounded-[24px] flex flex-col overflow-hidden relative shadow-sm h-full min-h-[500px] lg:min-h-0">
             <div class="bg-gray-50/60 dark:bg-gray-800/40 border-b border-gray-200/60 dark:border-gray-700/60 p-3 px-5 flex justify-between items-center z-20 backdrop-blur-md">
                 <div class="flex items-center gap-4">
                     <span class="font-bold text-gray-700 dark:text-gray-200 text-[14px]">输入源文本</span>
@@ -519,7 +547,7 @@
         </div>
 
         <!-- 右舷 -->
-        <div class="glass-panel rounded-[24px] flex flex-col overflow-hidden relative shadow-sm h-full">
+        <div class="glass-panel rounded-[24px] flex flex-col overflow-hidden relative shadow-sm h-full min-h-[500px] lg:min-h-0">
             <div class="bg-blue-50/60 dark:bg-[#0071e3]/10 border-b border-blue-100 dark:border-[#0071e3]/20 p-3 px-5 flex justify-between items-center z-10 backdrop-blur-md relative">
                 
                 <!-- ✨ Bug 3 修复：添加了发光边框的光辉进度条 -->
@@ -761,9 +789,48 @@
         toastTimeout = setTimeout(() => toast.classList.remove('show'), 2000);
     }
 
-    function toggleTheme() {
-        document.documentElement.classList.toggle('dark');
-        localStorage.theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+    function toggleTheme(event) {
+        // 1. 获取点击的精确坐标 (如果没有 event，则默认从屏幕中心扩散)
+        const x = event ? event.clientX : window.innerWidth / 2;
+        const y = event ? event.clientY : window.innerHeight / 2;
+
+        // 2. 核心算法：计算点击位置到屏幕最远角落的距离（这就是圆圈的最大半径）
+        const endRadius = Math.hypot(
+            Math.max(x, window.innerWidth - x),
+            Math.max(y, window.innerHeight - y)
+        );
+
+        // 3. 优雅降级：如果用户的浏览器太老不支持该现代 API，直接瞬间切换
+        if (!document.startViewTransition) {
+            document.documentElement.classList.toggle('dark');
+            localStorage.theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+            return;
+        }
+
+        // 4. 启动视图过渡魔法
+        const transition = document.startViewTransition(() => {
+            document.documentElement.classList.toggle('dark');
+            localStorage.theme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+        });
+
+        // 5. 在下一帧注入圆圈扩散动画 (Clip-Path)
+        transition.ready.then(() => {
+            const clipPath = [
+                `circle(0px at ${x}px ${y}px)`,
+                `circle(${endRadius}px at ${x}px ${y}px)`
+            ];
+            
+            document.documentElement.animate(
+                {
+                    clipPath: clipPath,
+                },
+                {
+                    duration: 550, // 扩散时间，可自由微调
+                    easing: 'ease-in-out',
+                    pseudoElement: '::view-transition-new(root)', // 只对新视图进行遮罩扩散
+                }
+            );
+        });
     }
 
     function toggleRateLimitUI() {
@@ -1397,12 +1464,71 @@ if (window.isApplyingLock) {
         }
     }
 
+    // ================= ✨ 纯加法：高级数字飙升引擎 (阻尼回弹版) =================
+    function animatePercentage(element, target, duration, isSuccessFlash = false) {
+        let startTimestamp = null;
+        element.innerText = '0.0%'; 
+        
+        // 清理状态
+        element.style.transition = 'none';
+        element.style.transform = 'scale(1)';
+        element.style.color = '';
+        element.style.textShadow = 'none';
+
+        const step = (timestamp) => {
+            if (!startTimestamp) startTimestamp = timestamp;
+            const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+            
+            // 缓动算法：easeOutExpo
+            const easeOut = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
+            const currentVal = (easeOut * target).toFixed(1);
+            
+            element.innerText = currentVal + '%';
+
+            if (progress < 1) {
+                window.requestAnimationFrame(step);
+            } else {
+                element.innerText = target.toFixed(1) + '%'; 
+                
+                // 【高级彩蛋】：苹果级阻尼回弹与多层空间光晕
+                if (isSuccessFlash) {
+                    // 1. 瞬间放大，营造“清脆落子”的物理冲击力
+                    element.style.transition = 'none';
+                    element.style.transform = 'scale(1.15)';
+                    
+                    // 2. 使用 Apple 原生成功绿 (#34C759)，并叠加 3 层阴影打造通透的体积光 (Bloom)
+                    element.style.color = '#34C759'; 
+                    element.style.textShadow = `
+                        0 4px 20px rgba(52, 199, 89, 0.5), 
+                        0 0 40px rgba(52, 199, 89, 0.2), 
+                        0 0 60px rgba(52, 199, 89, 0.1)
+                    `;
+                    
+                    // 3. 极短停留后，使用高级阻尼曲线丝滑回落
+                    requestAnimationFrame(() => {
+                        setTimeout(() => {
+                            // 这条 cubic-bezier 曲线是精髓，它模拟了沉甸甸的弹簧阻尼感
+                            element.style.transition = 'all 1.2s cubic-bezier(0.22, 1, 0.36, 1)';
+                            element.style.transform = 'scale(1)';
+                            element.style.color = ''; 
+                            element.style.textShadow = 'none';
+                        }, 80); // 仅仅滞空 80 毫秒
+                    });
+                }
+            }
+        };
+        window.requestAnimationFrame(step);
+    }
+    // ================= ✨ 引擎结束 =================
+
     function renderReportUI() {
         if(!lastDetectReportData) return;
         const data = lastDetectReportData;
         
-        document.getElementById('reportSourceAvg').innerText = (data.source.average * 100).toFixed(1) + '%';
-        document.getElementById('reportResultAvg').innerText = (data.result.average * 100).toFixed(1) + '%';
+        const srcAvg = data.source.average * 100;
+        const resAvg = data.result.average * 100;
+        animatePercentage(document.getElementById('reportSourceAvg'), srcAvg, 1500, false);
+        animatePercentage(document.getElementById('reportResultAvg'), resAvg, 1500, resAvg < srcAvg);
         
         const listContainer = document.getElementById('reportListContainer');
         listContainer.innerHTML = '';
@@ -1584,6 +1710,7 @@ if (window.isApplyingLock) {
         }, 400);
 
         requestRenderDiff();
+        
     }
 
     function stopOptimization() { if (abortController) { abortController.abort(); abortController = null; } 
@@ -1736,7 +1863,7 @@ let currentRunModel = model || "未知模型";
     
     // ✨ 3. 彻底抛弃 DOM 读取！无视任何动画延迟，直接用纯净变量拼接
     setBadgeStatus('wait', currentRunModel + ' (就绪)'); 
-    
+
     restoreUI(); 
     if(isDiffEnabled) renderDiff(); 
     saveCurrentTaskToHistory(); 
@@ -1753,6 +1880,124 @@ let currentRunModel = model || "未知模型";
             if (error.name === 'AbortError') showToast('已强制终止', 'info'); else showToast(error.message, "error"); restoreUI();
         } finally { abortController = null; }
     }
+</script>
+
+<div id="dropzoneOverlay" class="fixed inset-0 z-[200] hidden flex flex-col items-center justify-center bg-black/60 dark:bg-black/80 backdrop-blur-md opacity-0 transition-opacity duration-300 pointer-events-none">
+    <div class="glass-panel p-10 rounded-[32px] flex flex-col items-center transform scale-95 transition-transform duration-300" id="dropzoneBox">
+        <div class="w-24 h-24 mb-6 rounded-full bg-blue-500/20 flex items-center justify-center border-2 border-blue-400 border-dashed animate-[spin_4s_linear_infinite]">
+            <svg class="w-10 h-10 text-blue-500 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+        </div>
+        <h2 class="text-3xl font-extrabold text-white mb-2 tracking-tight">释放文件，瞬间解析</h2>
+        <p class="text-gray-300 font-medium">支持 .txt / .md / .json /word 格式</p>
+    </div>
+</div>
+
+<script>
+    (function initMagneticDropzone() {
+        const overlay = document.getElementById('dropzoneOverlay');
+        const box = document.getElementById('dropzoneBox');
+        let dragCounter = 0; // 防止子元素干扰导致闪烁
+
+        // 1. 当文件拖入浏览器时：展开结界
+        window.addEventListener('dragenter', (e) => {
+            e.preventDefault(); dragCounter++;
+            if (dragCounter === 1) {
+                overlay.classList.remove('hidden');
+                overlay.classList.add('pointer-events-auto');
+                // 延迟一下触发 CSS 渐变
+                requestAnimationFrame(() => {
+                    overlay.classList.remove('opacity-0');
+                    box.classList.remove('scale-95');
+                });
+            }
+        });
+
+        window.addEventListener('dragover', (e) => e.preventDefault());
+
+        // 2. 当文件拖离浏览器时：撤销结界
+        window.addEventListener('dragleave', (e) => {
+            e.preventDefault(); dragCounter--;
+            if (dragCounter === 0) {
+                overlay.classList.add('opacity-0');
+                box.classList.add('scale-95');
+                overlay.classList.remove('pointer-events-auto');
+                setTimeout(() => overlay.classList.add('hidden'), 300);
+            }
+        });
+
+        // 3. 当文件松手放下时：读取内容并塞入左侧文本框
+        window.addEventListener('drop', (e) => {
+            e.preventDefault(); dragCounter = 0;
+            
+            // 撤销结界动画并加上震动反馈
+            overlay.classList.add('opacity-0');
+            box.classList.add('scale-95');
+            overlay.classList.remove('pointer-events-auto');
+            document.body.style.transform = 'scale(0.99)';
+            setTimeout(() => { 
+                overlay.classList.add('hidden'); 
+                document.body.style.transform = 'scale(1)';
+            }, 150);
+
+            // 读取文件逻辑
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                const file = e.dataTransfer.files[0];
+                const validTextTypes = ['text/plain', 'text/markdown', 'application/json'];
+                
+                // 1. 处理纯文本文件 (.txt, .md)
+                if (validTextTypes.includes(file.type) || file.name.endsWith('.txt') || file.name.endsWith('.md')) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        document.getElementById('sourceText').value = event.target.result;
+                        if(window.handleInput) window.handleInput(); 
+                        if(window.showToast) window.showToast(`成功解析纯文本: ${file.name}`, 'success');
+                    };
+                    reader.readAsText(file);
+                } 
+                // 2. ✨ 新增：处理 Word 文档 (.docx)
+                else if (file.name.endsWith('.docx')) {
+                    if(window.showToast) window.showToast('正在解析 Word 文档，请稍候...', 'info');
+                    const reader = new FileReader();
+                    reader.onload = function(event) {
+                        const arrayBuffer = event.target.result;
+                        // 使用 mammoth.js 将 docx 的底层 XML 提取为纯文本，完美保留段落！
+                        mammoth.extractRawText({arrayBuffer: arrayBuffer})
+                            .then(function(result) {
+                                document.getElementById('sourceText').value = result.value;
+                                if(window.handleInput) window.handleInput(); 
+                                if(window.showToast) window.showToast(`成功提取 Word 文档: ${file.name}`, 'success');
+                            })
+                            .catch(function(err) {
+                                console.error(err);
+                                if(window.showToast) window.showToast('Word 文档解析失败或加密', 'error');
+                            });
+                    };
+                    // 注意：Word 文件必须作为二进制流读取
+                    reader.readAsArrayBuffer(file);
+                } 
+                // 3. 拒绝其他格式 (如 .pdf)
+                else {
+                    if(window.showToast) window.showToast('请拖入 .txt 或 .docx 格式文档。暂不支持 PDF（为保证排版精准度）', 'error');
+                }
+            }
+        });
+    })();
+</script>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const glowBtn = document.getElementById('processBtn');
+        if (glowBtn) {
+            glowBtn.addEventListener('mousemove', (e) => {
+                // 计算鼠标相对于按钮左上角的精确 X 和 Y 坐标
+                const rect = glowBtn.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                // 实时写入 CSS 变量，指挥光圈移动
+                glowBtn.style.setProperty('--x', `${x}px`);
+                glowBtn.style.setProperty('--y', `${y}px`);
+            });
+        }
+    });
 </script>
 </body>
 </html>

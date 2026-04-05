@@ -372,12 +372,20 @@ async def optimize_text(req: OptimizeRequest):
                         "messages": messages,
                         "stream": True,
                         "stream_options": {"include_usage": True},
-                        # === ✨ 核心魔法：接管用户传入的四大参数 ===
+                        # === ✨ 核心魔法：默认满载发射四大金刚参数 ===
                         "temperature": req.temperature,
                         "top_p": req.top_p,
                         "frequency_penalty": req.frequency_penalty,
                         "presence_penalty": req.presence_penalty
                     }
+                    
+                    # 🛡️ 绝对稳定网关：只针对“黑名单”模型进行精准卸载
+                    if "gemini" in model_lower or "claude" in model_lower:
+                        kwargs.pop("frequency_penalty", None)
+                        kwargs.pop("presence_penalty", None)
+                        # 可选：在后端控制台打印一条日志，让你心里有数
+                        print(f"[{active_model}] 触发网关拦截：已剥离不兼容的惩罚参数")
+
                     if extra_body:
                         kwargs["extra_body"] = extra_body
 
