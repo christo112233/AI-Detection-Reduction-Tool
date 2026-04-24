@@ -290,10 +290,13 @@ async def optimize_text(req: OptimizeRequest):
         active_model = req.model
         
         if "deepseek" in model_lower:
-            if not req.is_think and "reasoner" in model_lower:
-                active_model = req.model.replace("reasoner", "chat")
-            elif req.is_think and "chat" in model_lower:
-                active_model = req.model.replace("chat", "reasoner")
+         # 统一用 reasoning_effort 控制思考强度，不再区分模型名
+            extra_body["thinking"] = {
+            "type": "enabled" if req.is_think else "disabled"
+            }
+        if req.is_think:
+            extra_body["reasoning_effort"] = getattr(req, 'reasoning_effort', 'max')
+            active_model = req.model
         elif "qwen" in model_lower:
             extra_body["enable_thinking"] = req.is_think
         elif "glm" in model_lower or "zhipu" in model_lower:
