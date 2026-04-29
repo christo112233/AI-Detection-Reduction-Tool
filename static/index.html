@@ -252,6 +252,76 @@
         }
         .sliding-digit-num { height: 26px; line-height: 26px; text-align: center; flex-shrink: 0; }
 
+        /* ================= 日期时间小卡片 ================= */
+        .datetime-widget {
+            background: rgba(22, 27, 38, 0.85);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(88, 166, 255, 0.2);
+            border-radius: 12px;
+            padding: 8px 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: all 0.3s ease;
+        }
+        .datetime-widget:hover {
+            border-color: rgba(88, 166, 255, 0.5);
+            box-shadow: 0 0 15px rgba(88, 166, 255, 0.2);
+        }
+        /* 浅色模式 */
+        .light-mode .datetime-widget,
+        html:not(.dark) .datetime-widget {
+            background: rgba(255, 255, 255, 0.8);
+            border-color: rgba(0, 113, 227, 0.2);
+        }
+        html:not(.dark) .datetime-widget:hover {
+            border-color: rgba(0, 113, 227, 0.5);
+            box-shadow: 0 0 15px rgba(0, 113, 227, 0.15);
+        }
+        .datetime-time-row { margin-bottom: 3px; }
+        .datetime-date-text {
+            font-family: 'Segoe UI', 'Roboto', sans-serif;
+            font-size: 11px;
+            color: #8b949e;
+            white-space: nowrap;
+        }
+        html:not(.dark) .datetime-date-text { color: #6e6e73; }
+
+        /* 时间翻牌数字（premium） */
+        .datetime-digit-box {
+            width: 18px; height: 28px;
+            background-color: rgba(88, 166, 255, 0.12);
+            border-radius: 5px; color: #58a6ff;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-weight: 700; font-size: 15px;
+            overflow: hidden; position: relative;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.15);
+        }
+        html:not(.dark) .datetime-digit-box {
+            background-color: rgba(0, 113, 227, 0.08);
+            color: #0071e3;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.06);
+        }
+        .datetime-digit-col {
+            display: flex; flex-direction: column;
+            transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+            will-change: transform;
+        }
+        .datetime-digit-num { height: 28px; line-height: 28px; text-align: center; flex-shrink: 0; }
+        .datetime-sep {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-weight: 600; font-size: 13px;
+            color: rgba(88, 166, 255, 0.5);
+            user-select: none; pointer-events: none;
+            animation: datetime-sep-pulse 2s ease-in-out infinite;
+        }
+        html:not(.dark) .datetime-sep { color: rgba(0, 113, 227, 0.35); }
+        @keyframes datetime-sep-pulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
         /* ================= 差异对比颜色 ================= */
         .diff-container { font-family: inherit; white-space: pre-wrap; word-break: break-word; }
         .diff-add { background-color: #e6ffed; color: #1a7f37; text-decoration: none; border-radius: 4px; padding: 0.1em 0.25em; font-weight: 600; box-shadow: 0 1px 2px rgba(26, 127, 55, 0.1); }
@@ -436,11 +506,24 @@
     
     <!-- Header -->
     <header class="flex flex-col xl:flex-row items-start xl:items-center justify-between mb-5 shrink-0 px-1 z-20 gap-4">
-        <div class="flex flex-col">
-            <h1 class="text-3xl lg:text-[34px] font-extrabold tracking-tight text-gradient leading-tight">AI降重系统</h1>
-            <p class="text-[13px] text-gray-500 dark:text-gray-400 mt-1 font-medium hidden md:block">多维语义重构，生成具备“人类智慧印记”的高级防检测文本。</p>
+        <div class="flex items-center gap-5">
+            <!-- 🕐 日期时间小卡片 -->
+            <div class="datetime-widget shrink-0">
+                <div class="flex items-center gap-[3px] datetime-time-row">
+                    <div id="timeHourContainer" class="sliding-clock-wrapper"></div>
+                    <span class="datetime-sep">:</span>
+                    <div id="timeMinuteContainer" class="sliding-clock-wrapper"></div>
+                    <span class="datetime-sep">:</span>
+                    <div id="timeSecondContainer" class="sliding-clock-wrapper"></div>
+                </div>
+                <div id="dateText" class="datetime-date-text"></div>
+            </div>
+            <div class="flex flex-col">
+                <h1 class="text-3xl lg:text-[34px] font-extrabold tracking-tight text-gradient leading-tight">AI降重系统</h1>
+                <p class="text-[13px] text-gray-500 dark:text-gray-400 mt-1 font-medium hidden md:block">多维语义重构，生成具备"人类智慧印记"的高级防检测文本。</p>
+            </div>
         </div>
-        
+
         <div class="flex flex-wrap items-center gap-2.5 md:gap-4">
             <!-- ✨ 新增：DeepVeri 节点状态指示灯 -->
             <div id="dvHealthBadge" class="flex items-center justify-center gap-1.5 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-3 py-1.5 rounded-full shadow-sm transition-all duration-300 cursor-default" title="DeepVeri 本地服务心跳状态">
@@ -682,26 +765,41 @@
         updateSlidingClock('tokenFlipContainer', 0); updateSlidingClock('cacheFlipContainer', 0); 
     }
 
-    function updateSlidingClock(containerId, targetValue) {
+    function updateSlidingClock(containerId, targetValue, minDigits = 4, digitHeight = 26, boxClass = 'sliding-digit-box', colClass = 'sliding-digit-col', numClass = 'sliding-digit-num') {
         const valStr = targetValue.toString();
         const container = document.getElementById(containerId);
         if(!container) return;
-        const targetLength = Math.max(4, valStr.length);
+        const targetLength = Math.max(minDigits, valStr.length);
         while(container.children.length < targetLength) {
-            const box = document.createElement('div'); box.className = 'sliding-digit-box';
-            const col = document.createElement('div'); col.className = 'sliding-digit-col';
+            const box = document.createElement('div'); box.className = boxClass;
+            const col = document.createElement('div'); col.className = colClass;
             for(let j=0; j<=9; j++) {
-                const num = document.createElement('div'); num.className = 'sliding-digit-num'; num.innerText = j;
+                const num = document.createElement('div'); num.className = numClass; num.innerText = j;
                 col.appendChild(num);
             }
             box.appendChild(col); container.insertBefore(box, container.firstChild);
         }
-        const cols = Array.from(container.querySelectorAll('.sliding-digit-col'));
+        const cols = Array.from(container.querySelectorAll('.' + colClass.split(' ')[0]));
         const paddedStr = valStr.padStart(cols.length, '0');
         cols.forEach((col, index) => {
             const digit = parseInt(paddedStr[index]);
-            col.style.transform = `translateY(-${digit * 26}px)`;
+            col.style.transform = `translateY(-${digit * digitHeight}px)`;
         });
+    }
+
+    function updateDateTimeClock() {
+        const now = new Date();
+        // 时间：翻牌数字
+        updateSlidingClock('timeHourContainer', now.getHours(), 2, 28, 'datetime-digit-box', 'datetime-digit-col', 'datetime-digit-num');
+        updateSlidingClock('timeMinuteContainer', now.getMinutes(), 2, 28, 'datetime-digit-box', 'datetime-digit-col', 'datetime-digit-num');
+        updateSlidingClock('timeSecondContainer', now.getSeconds(), 2, 28, 'datetime-digit-box', 'datetime-digit-col', 'datetime-digit-num');
+        // 日期：静态文字 + 星期
+        const weekDays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const d = String(now.getDate()).padStart(2, '0');
+        const w = weekDays[now.getDay()];
+        document.getElementById('dateText').textContent = `${y}-${m}-${d} ${w}`;
     }
 
     let toastTimeout;
@@ -855,6 +953,8 @@
     document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('batchSize').addEventListener('change', (e) => localStorage.setItem('batchSize', e.target.value));
         document.getElementById('batchDelay').addEventListener('change', (e) => localStorage.setItem('batchDelay', e.target.value));
+        updateDateTimeClock();
+        setInterval(updateDateTimeClock, 1000);
     });
 
     function toggleSettings() {
@@ -1422,7 +1522,7 @@ if (window.isApplyingLock) {
             });
             const data = await response.json();
             
-            // ✨ 新增逻辑：接住后端“守门员”打回的错误信号，并恢复按钮状态
+            // ✨ 新增逻辑：接住后端"守门员"打回的错误信号，并恢复按钮状态
             if (data.status === 'error') {
                 if (autoShow) showToast(data.message || "检测节点未响应", "error");
                 return; // 直接退出，代码会走到 finally 自动恢复按钮
@@ -1459,7 +1559,7 @@ if (window.isApplyingLock) {
             showToast("检测引擎未响应，请检查 5005 端口", "error");
         } finally {
             btn.disabled = false;
-            // ✨ 改用动画函数恢复按钮，结合上面的 clearTimeout，彻底扼杀残余的“分析中”指令
+            // ✨ 改用动画函数恢复按钮，结合上面的 clearTimeout，彻底扼杀残余的"分析中"指令
             updateBtnWithAnimation(btn, `<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>检测AI率`);
         }
     }
@@ -1492,7 +1592,7 @@ if (window.isApplyingLock) {
                 
                 // 【高级彩蛋】：苹果级阻尼回弹与多层空间光晕
                 if (isSuccessFlash) {
-                    // 1. 瞬间放大，营造“清脆落子”的物理冲击力
+                    // 1. 瞬间放大，营造"清脆落子"的物理冲击力
                     element.style.transition = 'none';
                     element.style.transform = 'scale(1.15)';
                     
@@ -1702,7 +1802,7 @@ if (window.isApplyingLock) {
         
         // ✨ 删除了光晕类名的控制，因为已经交给了 startOptimization 全局接管！
         
-        // 保留 400ms 定时器，仅仅用于在网络停顿时“抹除游标”，保证文本纯净
+        // 保留 400ms 定时器，仅仅用于在网络停顿时"抹除游标"，保证文本纯净
         if (window.cursorTimeout) clearTimeout(window.cursorTimeout);
         window.cursorTimeout = setTimeout(() => {
             resText.value = displayClean; 
