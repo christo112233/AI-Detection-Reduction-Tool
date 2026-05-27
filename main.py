@@ -11,7 +11,10 @@ import uvicorn
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, StreamingResponse
 from openai import AsyncOpenAI
+import sys
 import time
+import socket
+import subprocess
 
 # 导入单独分离的提示词配置
 from prompts import (
@@ -492,7 +495,182 @@ def start_browser():
     print(">>> 提示：关闭浏览器网页后，本控制台会自动停止运行 <<<\n")
     webbrowser.open_new(url)
 
+
+def check_port_available(host: str, port: int) -> bool:
+    """检测端口是否可用"""
+    if sys.platform == "win32":
+        try:
+            output = subprocess.check_output(
+                ["netstat", "-ano"],
+                text=True,
+                timeout=5
+            )
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return True
+
+        pattern = re.compile(
+            rf"^\s*TCP\s+\S+:{port}\s+\S+\s+LISTENING\s+\d+",
+            re.MULTILINE
+        )
+        return not pattern.search(output)
+    else:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            try:
+                sock.bind((host, port))
+                return True
+            except OSError:
+                return False
+
+
+def find_pids_by_port_windows(port: int) -> list:
+    """在 Windows 上查找占用指定端口的 PID 列表"""
+    try:
+        output = subprocess.check_output(
+            ["netstat", "-ano"],
+            text=True,
+            timeout=5
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+        print(f"[错误] 无法执行 netstat 命令: {e}")
+        return []
+
+    pids = set()
+    pattern = re.compile(
+        rf"^\s*TCP\s+\S+:{port}\s+\S+\s+LISTENING\s+(\d+)",
+        re.MULTILINE
+    )
+    for match in pattern.finditer(output):
+        pids.add(int(match.group(1)))
+    return list(pids)
+
+
+def find_pids_by_port_unix(port: int) -> list:
+    """在 Linux/macOS 上查找占用指定端口的 PID 列表"""
+    try:
+        output = subprocess.check_output(
+            ["lsof", "-ti", f":{port}"],
+            text=True,
+            timeout=5
+        )
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
+        try:
+            output = subprocess.check_output(
+                ["ss", "-tlnpH"],
+                text=True,
+                timeout=5
+            )
+            pids = set()
+            for line in output.splitlines():
+                if f":{port}" in line:
+                    m = re.search(r"pid=(\d+)", line)
+                    if m:
+                        pids.add(int(m.group(1)))
+            return list(pids)
+        except Exception:
+            return []
+    else:
+        pids = set()
+        for line in output.strip().splitlines():
+            line = line.strip()
+            if line.isdigit():
+                pids.add(int(line))
+        return list(pids)
+
+
+def kill_process(pid: int) -> bool:
+    """终止指定 PID 的进程"""
+    if sys.platform == "win32":
+        try:
+            subprocess.check_call(
+                ["taskkill", "/F", "/PID", str(pid)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10
+            )
+            return True
+        except subprocess.CalledProcessError:
+            return False
+        except subprocess.TimeoutExpired:
+            return False
+    else:
+        try:
+            os.kill(pid, 9)
+            return True
+        except OSError:
+            return False
+
+
+def resolve_port_conflict(host: str, port: int) -> bool:
+    """
+    检测端口是否被占用，若被占用则尝试终止占用进程。
+    返回 True 表示端口现在可用，False 表示无法释放端口。
+    """
+    if check_port_available(host, port):
+        return True
+
+    print(f"[端口冲突] 检测到端口 {port} 已被占用，正在清理...")
+
+    if sys.platform == "win32":
+        pids = find_pids_by_port_windows(port)
+    else:
+        pids = find_pids_by_port_unix(port)
+
+    if not pids:
+        print(f"[警告] 未能识别占用端口 {port} 的进程。")
+        print("[提示] 请手动关闭占用该端口的程序后重试。")
+        return False
+
+    my_pid = os.getpid()
+    parent_pid = os.getppid()
+    safe_to_kill = [p for p in pids if p not in (my_pid, parent_pid)]
+
+    if not safe_to_kill:
+        print(f"[警告] 占用端口 {port} 的进程为当前程序自身或其父进程。")
+        print("[提示] 可能存在僵尸进程，请关闭本程序所有实例后重试。")
+        return False
+
+    print(f"[清理] 发现占用端口 {port} 的进程: PID={safe_to_kill}")
+
+    for pid in safe_to_kill:
+        print(f"[清理] 正在终止进程 PID={pid}...")
+        if kill_process(pid):
+            print(f"[清理] 成功终止进程 PID={pid}")
+        else:
+            print(f"[警告] 无法终止进程 PID={pid}（可能为系统进程或权限不足）")
+
+    time.sleep(0.5)
+
+    if check_port_available(host, port):
+        print(f"[清理] 端口 {port} 已释放，继续启动服务。")
+        return True
+
+    print("[清理] 端口仍被占用，尝试二次清理...")
+    if sys.platform == "win32":
+        pids = find_pids_by_port_windows(port)
+    else:
+        pids = find_pids_by_port_unix(port)
+
+    safe_to_kill = [p for p in pids if p not in (my_pid, parent_pid)]
+    for pid in safe_to_kill:
+        kill_process(pid)
+
+    time.sleep(0.5)
+
+    if check_port_available(host, port):
+        print(f"[清理] 端口 {port} 已释放，继续启动服务。")
+        return True
+    else:
+        print(f"[致命错误] 无法释放端口 {port}。请手动关闭占用程序后重试。")
+        return False
+
+
 if __name__ == "__main__":
+    if not resolve_port_conflict("127.0.0.1", 8000):
+        print("\n程序无法启动：端口 8000 被占用且无法自动释放。")
+        print("请手动关闭占用该端口的程序后重新运行。")
+        input("按回车键退出...")
+        sys.exit(1)
+
     threading.Timer(0, start_browser).start()
     # threading.Thread(target=monitor_heartbeat, daemon=True).start()
     print("正在启动 AI降重系统 核心引擎...")
