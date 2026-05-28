@@ -406,14 +406,14 @@ async def optimize_text(req: OptimizeRequest):
                         # === ✨ 核心修改区域：接管 Token 计算 ===
                         if hasattr(chunk, 'usage') and chunk.usage:
                             # 1. 提取当前这一小段的原始消耗
-                            current_total = chunk.usage.total_tokens
+                            current_total = chunk.usage.total_tokens or 0
                             current_cached = 0
                             
                             # 2. 提取当前这一小段的缓存命中
                             if hasattr(chunk.usage, 'prompt_tokens_details') and chunk.usage.prompt_tokens_details:
-                                current_cached = getattr(chunk.usage.prompt_tokens_details, 'cached_tokens', 0)
+                                current_cached = getattr(chunk.usage.prompt_tokens_details, 'cached_tokens', 0) or 0
                             elif hasattr(chunk.usage, 'prompt_cache_hit_tokens'):
-                                current_cached = getattr(chunk.usage.prompt_cache_hit_tokens, 'cached_tokens', 0)
+                                current_cached = getattr(chunk.usage.prompt_cache_hit_tokens, 'cached_tokens', 0) or 0
                             
                             # 3. 核心魔法：向全局账本进行“滚雪球”累加
                             global_total_tokens += current_total
