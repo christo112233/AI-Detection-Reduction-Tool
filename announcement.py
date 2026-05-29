@@ -1,12 +1,19 @@
 """
 公告模块 — 从 GitHub / Gitee 拉取 announcement.json，支持双源降级与本地缓存。
-纯标准库实现，无外部依赖。
 """
 import json
 import os
+import ssl
 import asyncio
 import urllib.request
 from fastapi import APIRouter
+
+# PyInstaller 打包后需要用 certifi 的证书 bundle 来验证 HTTPS
+try:
+    import certifi
+    _SSL_CONTEXT = ssl.create_default_context(cafile=certifi.where())
+except Exception:
+    _SSL_CONTEXT = ssl.create_default_context()
 
 router = APIRouter(prefix="/api/announcement", tags=["announcement"])
 
@@ -50,9 +57,10 @@ def _fetch_url_sync(url: str) -> dict | None:
     """同步从单个 URL 拉取 JSON，超时/失败返回 None"""
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "TraceLess/4.4"})
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+        with urllib.request.urlopen(req, timeout=TIMEOUT, context=_SSL_CONTEXT) as resp:
             return json.loads(resp.read().decode("utf-8"))
-    except Exception:
+    except Exception as e:
+        print(f"[公告] 拉取失败: {e}")
         return None
 
 
