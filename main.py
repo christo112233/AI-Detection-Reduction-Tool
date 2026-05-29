@@ -27,12 +27,14 @@ from protector import get_protection_prompt_addition, is_segment_fully_protected
 from inspector_api import router as inspector_router
 # ✨ 引入 DeepVeri 检测器与健康探针
 from detector import check_aigc_rate, check_health
+from announcement import router as announcement_router
 
 app = FastAPI(title="AI降重系统 API")
 
 os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(inspector_router)
+app.include_router(announcement_router)
 
 CONFIG_FILE = "config.json"
 LAST_HEARTBEAT = time.time()

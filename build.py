@@ -70,7 +70,7 @@ else:
         "pyinstaller",
         "--noconfirm",           # 覆盖已存在的生成目录
         "--onedir",              # 核心修改：打包成一个文件夹 (不使用 --onefile)
-        "--name=AI降重系统",       # 设定输出软件的名称
+        "--name=TraceLess",       # 设定输出软件的名称
         f"--add-data=static{sep}static", # 把包含 index.html 的前端文件夹塞进目录里
         "--clean",               # 打包前清理缓存
         build_file_name

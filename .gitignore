@@ -24,3 +24,6 @@ build/
 .vscode/
 .DS_Store
 task_history.json
+announcement_cache.json
+announcement_read_state.json
+发布公告说明.md

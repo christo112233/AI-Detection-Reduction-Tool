@@ -559,6 +559,9 @@
         </div>
     </header>
 
+    <!-- 公告栏 -->
+    <div id="announcementBarContainer"></div>
+
     <!-- 中控面板 -->
     <div class="flex flex-col md:flex-row items-center justify-between gap-4 mb-4 shrink-0 px-1 z-10">
         <div class="relative flex w-full md:w-[500px] bg-gray-200/80 dark:bg-gray-800/80 rounded-[14px] p-1 items-center shadow-inner h-[42px]">
@@ -1689,7 +1692,8 @@ if (window.isApplyingLock) {
         
         try { const htmlRes = await fetch('/static/lock_ui.html?t=' + new Date().getTime()); const htmlText = await htmlRes.text(); const tempDiv = document.createElement('div'); tempDiv.innerHTML = htmlText; document.body.appendChild(tempDiv.querySelector('#lockPopup')); const script = document.createElement('script'); script.textContent = tempDiv.querySelector('script').textContent; document.body.appendChild(script); setTimeout(() => { if(window.LockSystem) window.LockSystem.init(); }, 100); } catch(e) { }
         try { const insRes = await fetch('/static/inspector_ui.html?t=' + new Date().getTime()); const insText = await insRes.text(); const insDiv = document.createElement('div'); insDiv.innerHTML = insText; document.body.appendChild(insDiv.querySelector('#inspectorOverlay')); const insScript = document.createElement('script'); insScript.textContent = insDiv.querySelector('script').textContent; document.body.appendChild(insScript); setTimeout(() => { if(window.InspectorSystem) window.InspectorSystem.init(); }, 100); } catch(e) { }
-        
+        try { const annRes = await fetch('/static/announcement_ui.html?t=' + new Date().getTime()); const annText = await annRes.text(); const annDiv = document.createElement('div'); annDiv.innerHTML = annText; document.getElementById('announcementBarContainer').appendChild(annDiv.querySelector('#announcementBar')); document.body.appendChild(annDiv.querySelector('#announcementModal')); const annScript = document.createElement('script'); annScript.textContent = annDiv.querySelector('script').textContent; document.body.appendChild(annScript); setTimeout(() => { if(window.AnnouncementSystem) window.AnnouncementSystem.init(); }, 100); } catch(e) { }
+
         try {
             const response = await fetch('/api/config'); const config = await response.json();
             document.getElementById('baseUrl').value = config.base_url || "https://api.openai.com/v1"; 

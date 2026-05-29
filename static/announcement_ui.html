@@ -1,0 +1,334 @@
+<!-- 公告滚动条 -->
+<div id="announcementBar" class="mx-auto mb-4 px-1 z-10 max-w-[1800px] w-full">
+    <div id="announcementTicker" class="glass-panel rounded-[14px] px-4 py-2 flex items-center gap-3 cursor-pointer hover:shadow-md transition-shadow overflow-hidden" onclick="window.AnnouncementSystem.openDetail()" title="点击查看公告详情">
+        <svg class="w-4 h-4 text-[#0071e3] dark:text-[#4facfe] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"></path></svg>
+        <div class="overflow-hidden flex-1 h-5">
+            <div id="announcementMarquee" class="whitespace-nowrap text-[13px] font-medium text-gray-700 dark:text-gray-300 inline-block"></div>
+        </div>
+        <span id="announcementSourceTag" class="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full leading-none bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500">--</span>
+        <span id="announcementBadge" class="hidden shrink-0 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">NEW</span>
+        <button id="announcementRefreshBtn" class="shrink-0 p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors active:scale-90" onclick="event.stopPropagation(); window.AnnouncementSystem.refresh();" title="刷新公告">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+        </button>
+    </div>
+</div>
+
+<!-- 公告详情弹窗 -->
+<div id="announcementModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/30 dark:bg-black/50 modal-backdrop opacity-0 pointer-events-none transition-opacity duration-300">
+    <div id="announcementModalContent" class="glass-panel w-full max-w-lg max-h-[80vh] p-0 rounded-[24px] transform scale-95 transition-transform duration-300 shadow-2xl relative flex flex-col overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700/50 flex justify-between items-center bg-white/50 dark:bg-black/20 shrink-0">
+            <h3 class="text-lg font-bold flex items-center gap-2 text-gray-800 dark:text-gray-100">
+                <svg class="w-5 h-5 text-[#0071e3]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"></path></svg>
+                系统公告
+            </h3>
+            <button onclick="window.AnnouncementSystem.closeDetail()" class="text-gray-400 hover:text-gray-800 dark:hover:text-white bg-gray-100 dark:bg-gray-800 rounded-full p-1.5 active:scale-95 transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        <div class="flex-1 overflow-y-auto report-scroll p-6" id="announcementDetailContent">
+        </div>
+        <div class="px-6 py-3 border-t border-gray-200 dark:border-gray-700/50 flex justify-between items-center bg-white/30 dark:bg-black/10 shrink-0">
+            <span id="announcementPageInfo" class="text-[12px] text-gray-400 font-mono"></span>
+            <div class="flex gap-2">
+                <button id="announcementPrevBtn" onclick="window.AnnouncementSystem.prevPage()" class="px-3 py-1.5 text-[12px] font-medium text-gray-500 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 active:scale-95 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">上一条</button>
+                <button id="announcementNextBtn" onclick="window.AnnouncementSystem.nextPage()" class="px-3 py-1.5 text-[12px] font-medium text-gray-500 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 active:scale-95 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">下一条</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+window.AnnouncementSystem = {
+    announcements: [],
+    currentIndex: 0,
+    readIds: new Set(),
+    isRefreshing: false,
+
+    init: async function() {
+        try {
+            var stored = localStorage.getItem('announcement_read_ids');
+            if (stored) this.readIds = new Set(JSON.parse(stored));
+        } catch(e) {}
+
+        this.setMarqueeText('正在加载公告...');
+        await this.fetchAndRender();
+    },
+
+    refresh: async function() {
+        if (this.isRefreshing) return;
+        this.isRefreshing = true;
+        var btn = document.getElementById('announcementRefreshBtn');
+        var svg = btn.querySelector('svg');
+        svg.classList.add('animate-spin');
+        this.setMarqueeText('正在刷新公告...');
+        await this.fetchAndRender();
+        svg.classList.remove('animate-spin');
+        this.isRefreshing = false;
+    },
+
+    async fetchAndRender() {
+        var sourceTag = document.getElementById('announcementSourceTag');
+        try {
+            var resp = await fetch('/api/announcement/fetch');
+            var data = await resp.json();
+
+            sourceTag.textContent = this.sourceLabel(data.source);
+            sourceTag.className = this.sourceClass(data.source);
+
+            if (data.status !== 'success' || !data.announcements.length) {
+                this.announcements = [];
+                this.setMarqueeText('暂无公告');
+                document.getElementById('announcementBadge').classList.add('hidden');
+                return;
+            }
+
+            this.announcements = data.announcements;
+
+            if (data.source !== 'cache') {
+                // 以后端返回的 _read 为准，同步前端和 localStorage 的已读状态
+                this.readIds.clear();
+                for (var i = 0; i < this.announcements.length; i++) {
+                    if (this.announcements[i]._read) this.readIds.add(this.announcements[i].id);
+                }
+                this.persistReadIds();
+            }
+
+            this.renderMarquee();
+
+            if (!sessionStorage.getItem('announcement_initial_check_done')) {
+                sessionStorage.setItem('announcement_initial_check_done', '1');
+                this.checkAutoPopup();
+            }
+        } catch(e) {
+            sourceTag.textContent = '离线';
+            sourceTag.className = 'shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full leading-none bg-red-100 text-red-500 dark:bg-red-900/30 dark:text-red-400';
+            this.setMarqueeText('暂无公告');
+            document.getElementById('announcementBadge').classList.add('hidden');
+        }
+    },
+
+    sourceLabel: function(src) {
+        if (src === 'github') return 'GitHub';
+        if (src === 'gitee') return 'Gitee';
+        if (src === 'cache') return '本地缓存';
+        return '--';
+    },
+
+    sourceClass: function(src) {
+        var base = 'shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-full leading-none ';
+        if (src === 'github') return base + 'bg-gray-800 text-white dark:bg-white dark:text-black';
+        if (src === 'gitee') return base + 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400';
+        if (src === 'cache') return base + 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400';
+        return base + 'bg-gray-100 text-gray-400 dark:bg-gray-800 dark:text-gray-500';
+    },
+
+    setMarqueeText: function(text) {
+        var marquee = document.getElementById('announcementMarquee');
+        if (this._rafId) { cancelAnimationFrame(this._rafId); this._rafId = null; }
+        marquee.style.transform = 'translateX(0)';
+
+        if (text.length < 30) {
+            marquee.textContent = text;
+            return;
+        }
+
+        marquee.textContent = text;
+        var textWidth = marquee.scrollWidth;
+        var containerWidth = marquee.parentElement.offsetWidth;
+        if (textWidth <= containerWidth || containerWidth <= 0) return;
+
+        // 从容器右边缘外开始滚入，滚出左边缘后重新从右边进入
+        var speed = 60; // 像素/秒
+        var x = containerWidth;
+        var self = this;
+        var lastTime = 0;
+
+        var animate = function(timestamp) {
+            if (!lastTime) lastTime = timestamp;
+            var dt = (timestamp - lastTime) / 1000;
+            lastTime = timestamp;
+            x -= speed * dt;
+            if (x <= -textWidth) x = containerWidth;
+            marquee.style.transform = 'translateX(' + Math.round(x) + 'px)';
+            self._rafId = requestAnimationFrame(animate);
+        };
+
+        this._rafId = requestAnimationFrame(animate);
+    },
+
+    checkAutoPopup: function() {
+        var unread = this.announcements.filter(function(a) { return !this.readIds.has(a.id); }, this);
+        if (unread.length > 0) {
+            var firstUnread = -1;
+            for (var i = 0; i < this.announcements.length; i++) {
+                if (!this.readIds.has(this.announcements[i].id)) { firstUnread = i; break; }
+            }
+            this.currentIndex = firstUnread;
+            this.openDetail();
+        }
+    },
+
+    renderMarquee: function() {
+        var badge = document.getElementById('announcementBadge');
+        var unread = this.announcements.filter(function(a) { return !this.readIds.has(a.id); }, this);
+        var unreadCount = unread.length;
+
+        if (unreadCount > 0) {
+            badge.classList.remove('hidden');
+            badge.textContent = unreadCount;
+        } else {
+            badge.classList.add('hidden');
+        }
+
+        var titles = this.announcements.map(function(a) { return a.title || '(无标题)'; });
+        this.setMarqueeText(titles.join('  ·  ·  ·  '));
+    },
+
+    openDetail: function() {
+        if (!this.announcements.length) return;
+
+        this.renderDetail();
+        var modal = document.getElementById('announcementModal');
+        var content = document.getElementById('announcementModalContent');
+        modal.classList.remove('opacity-0', 'pointer-events-none');
+        content.classList.remove('scale-95');
+
+        var current = this.announcements[this.currentIndex];
+        console.log('[公告] openDetail, current.id=' + (current ? current.id : 'null'), '已读集合:', Array.from(this.readIds));
+        if (current && !this.readIds.has(current.id)) {
+            console.log('[公告] 未读过，准备标记已读');
+            this.readIds.add(current.id);
+            this.persistReadIds();
+            this.markRemoteRead(current.id);
+            this.renderMarquee();
+        } else {
+            console.log('[公告] 已读过，跳过标记');
+        }
+    },
+
+    closeDetail: function() {
+        var modal = document.getElementById('announcementModal');
+        var content = document.getElementById('announcementModalContent');
+        modal.classList.add('opacity-0', 'pointer-events-none');
+        content.classList.add('scale-95');
+    },
+
+    prevPage: function() {
+        if (this.currentIndex > 0) {
+            this.currentIndex--;
+            this.renderDetail();
+            this.markCurrentAsRead();
+        }
+    },
+
+    nextPage: function() {
+        if (this.currentIndex < this.announcements.length - 1) {
+            this.currentIndex++;
+            this.renderDetail();
+            this.markCurrentAsRead();
+        }
+    },
+
+    markCurrentAsRead: function() {
+        var current = this.announcements[this.currentIndex];
+        if (current && !this.readIds.has(current.id)) {
+            this.readIds.add(current.id);
+            this.persistReadIds();
+            this.markRemoteRead(current.id);
+            this.renderMarquee();
+        }
+    },
+
+    persistReadIds: function() {
+        try {
+            localStorage.setItem('announcement_read_ids', JSON.stringify(Array.from(this.readIds)));
+        } catch(e) {}
+    },
+
+    markRemoteRead: async function(id) {
+        try {
+            console.log('[公告] 前端发送已读请求:', id);
+            await fetch('/api/announcement/mark_read', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: id })
+            });
+            console.log('[公告] 已读请求完成:', id);
+        } catch(e) {
+            console.error('[公告] 已读请求失败:', e);
+        }
+    },
+
+    renderMarkdown: function(md) {
+        if (!md) return '';
+        var html = md
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/&amp;(lt;|gt;|amp;|quot;|#039;)/g, '&$1');
+
+        html = html.replace(/```(\w*)\n([\s\S]*?)```/g, function(_, lang, code) {
+            return '<pre class="bg-gray-100 dark:bg-gray-800 rounded-lg p-3 my-2 overflow-x-auto text-[12px] font-mono leading-relaxed">' + code + '</pre>';
+        });
+
+        html = html.replace(/`([^`]+)`/g, '<code class="bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded text-[12px] font-mono text-red-500 dark:text-red-400">$1</code>');
+
+        html = html.replace(/^### (.+)$/gm, '<h4 class="text-[15px] font-semibold mt-4 mb-1 text-gray-800 dark:text-gray-200">$1</h4>');
+        html = html.replace(/^## (.+)$/gm, '<h3 class="text-[16px] font-bold mt-5 mb-2 text-gray-800 dark:text-gray-200">$1</h3>');
+        html = html.replace(/^# (.+)$/gm, '<h2 class="text-[18px] font-bold mt-5 mb-2 text-gray-800 dark:text-gray-200">$1</h2>');
+
+        html = html.replace(/^- (.+)$/gm, '<li class="ml-4 list-disc text-[14px] leading-relaxed text-gray-700 dark:text-gray-300">$1</li>');
+        html = html.replace(/(<li[^>]*>.*<\/li>\n?)+/g, '<ul class="my-2">$&</ul>');
+
+        html = html.replace(/^\d+\. (.+)$/gm, '<li class="ml-4 list-decimal text-[14px] leading-relaxed text-gray-700 dark:text-gray-300">$1</li>');
+
+        html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+        html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function(_, text, url) {
+            return '<a href="' + url + '" target="_blank" class="text-[#0071e3] dark:text-[#4facfe] underline hover:opacity-80" onclick="event.preventDefault(); window.open(\'' + url + '\', \'_blank\');">' + text + '</a>';
+        });
+
+        html = html.replace(/\n\n/g, '<br><br>');
+        html = html.replace(/\n/g, '<br>');
+
+        html = html.replace(/^---$/gm, '<hr class="my-4 border-gray-200 dark:border-gray-700">');
+
+        return html;
+    },
+
+    renderDetail: function() {
+        var container = document.getElementById('announcementDetailContent');
+        var pageInfo = document.getElementById('announcementPageInfo');
+        var prevBtn = document.getElementById('announcementPrevBtn');
+        var nextBtn = document.getElementById('announcementNextBtn');
+
+        var a = this.announcements[this.currentIndex];
+        if (!a) return;
+
+        var contentHtml = this.renderMarkdown(a.content || '*暂无内容*');
+        var linkHtml = a.link
+            ? '<a href="' + a.link + '" target="_blank" class="inline-flex items-center gap-1 mt-3 text-[13px] text-[#0071e3] dark:text-[#4facfe] font-medium hover:underline" onclick="event.preventDefault(); window.open(\'' + a.link + '\', \'_blank\');"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>查看原文链接</a>'
+            : '';
+
+        container.innerHTML =
+            '<div class="mb-4">' +
+                '<h2 class="text-xl font-bold text-gray-900 dark:text-gray-100 leading-snug">' + this.escapeHtml(a.title || '无标题') + '</h2>' +
+                '<p class="text-[12px] text-gray-400 dark:text-gray-500 mt-1 font-mono">' + this.escapeHtml(a.date || '') + '</p>' +
+            '</div>' +
+            '<div class="text-[14px] leading-[1.8] text-gray-700 dark:text-gray-300">' +
+                contentHtml +
+            '</div>' +
+            linkHtml;
+
+        pageInfo.textContent = (this.currentIndex + 1) + ' / ' + this.announcements.length;
+        prevBtn.disabled = this.currentIndex === 0;
+        nextBtn.disabled = this.currentIndex >= this.announcements.length - 1;
+    },
+
+    escapeHtml: function(str) {
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+};
+</script>
